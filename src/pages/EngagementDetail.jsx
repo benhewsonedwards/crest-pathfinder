@@ -588,6 +588,13 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   const doneTasks = allTasks.filter(t => t.done).length;
   const totalPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
   const currentStageDef = STAGES.find(s => s.key === engagement.currentStage);
+
+  // Memoized callback for GanttChart — stable reference prevents unnecessary remounts
+  const ganttUpdateTask = useCallback((stageKey, taskId, updates) => {
+    const tasks = engagement.stageTasks?.[stageKey] || [];
+    const idx = tasks.findIndex(t => t.id === taskId);
+    if (idx !== -1) updateTask(stageKey, idx, updates);
+  }, [engagement.stageTasks]); // eslint-disable-line react-hooks/exhaustive-deps
   const rag = RAG_STATUSES.find(r => r.key === engagement.ragStatus) || RAG_STATUSES[0];
 
   const stageTabs = STAGE_KEYS.map(sk => {
@@ -1035,11 +1042,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
           <GanttChart
             stageTasks={engagement.stageTasks || {}}
             canEdit={canEdit}
-            onUpdateTask={useCallback((stageKey, taskId, updates) => {
-              const tasks = engagement.stageTasks?.[stageKey] || [];
-              const idx = tasks.findIndex(t => t.id === taskId);
-              if (idx !== -1) updateTask(stageKey, idx, updates);
-            }, [engagement.stageTasks])}
+            onUpdateTask={ganttUpdateTask}
           />
         </Card>
       )}
