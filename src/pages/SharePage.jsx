@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { STAGES, STAGE_KEYS, RAG_STATUSES, stageColour } from "../lib/constants";
+import { STAGES, STAGE_KEYS, RAG_STATUSES, stageColour, fmtDate } from "../lib/constants";
 import { integrationStatus, TICKET_TYPES, ticketType } from "../lib/integrationConstants";
 import { Spinner } from "../components/UI";
+
+const LABEL_W = 140; // px — must match label span width below
 
 // ─── Mini Gantt ───────────────────────────────────────────────────────────────
 function MiniGantt({ stageTasks }) {
@@ -15,18 +17,14 @@ function MiniGantt({ stageTasks }) {
   const allDates = dated.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
   const minDate = new Date(allDates[0]); minDate.setDate(minDate.getDate() - 1);
   const maxDate = new Date(allDates[allDates.length - 1]); maxDate.setDate(maxDate.getDate() + 2);
-  const xPct = iso => ((new Date(iso) - minDate) / (maxDate - minDate)) * 100;
+  const span = maxDate - minDate;
+  const xPct = iso => ((new Date(iso) - minDate) / span) * 100;
   const todayPct = xPct(new Date().toISOString().slice(0, 10));
   const showToday = todayPct > 0 && todayPct < 100;
 
   return (
     <div style={{ overflowX: "auto", paddingBottom: 4 }}>
-      <div style={{ minWidth: 420, position: "relative" }}>
-        {showToday && (
-          <div style={{ position: "absolute", top: 0, bottom: 0, left: `${todayPct}%`, width: 1.5, background: "#D97706", zIndex: 2, opacity: 0.7 }}>
-            <span style={{ position: "absolute", top: -14, left: 4, fontSize: 9, color: "#D97706", fontWeight: 700, whiteSpace: "nowrap" }}>TODAY</span>
-          </div>
-        )}
+      <div style={{ minWidth: 420 }}>
         {dated.map((t, i) => {
           const colour = stageColour(t.stageKey);
           const x1 = xPct(t.startDate || t.endDate);
@@ -34,8 +32,12 @@ function MiniGantt({ stageTasks }) {
           const w = Math.max(x2 - x1, 1.5);
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", marginBottom: 5 }}>
-              <span style={{ fontSize: 10, color: "#6B7280", width: 140, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{t.title}</span>
+              <span style={{ fontSize: 10, color: "#6B7280", width: LABEL_W, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", paddingRight: 8 }}>{t.title}</span>
+              {/* Bar area — today line lives here, not in the label */}
               <div style={{ flex: 1, position: "relative", height: 16, background: "#F3F4F6", borderRadius: 4 }}>
+                {showToday && (
+                  <div style={{ position: "absolute", top: 0, bottom: 0, left: `${todayPct}%`, width: 1.5, background: "#D97706", zIndex: 2, opacity: 0.85 }} />
+                )}
                 <div style={{
                   position: "absolute", left: `${x1}%`, width: `${w}%`, height: "100%",
                   background: t.done ? colour + "50" : colour + "80",
@@ -45,6 +47,14 @@ function MiniGantt({ stageTasks }) {
             </div>
           );
         })}
+        {showToday && (
+          <div style={{ display: "flex", marginTop: 1 }}>
+            <div style={{ width: LABEL_W, flexShrink: 0 }} />
+            <div style={{ flex: 1, position: "relative" }}>
+              <span style={{ position: "absolute", left: `${todayPct}%`, transform: "translateX(-50%)", fontSize: 8, color: "#D97706", fontWeight: 700 }}>TODAY</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -266,6 +276,75 @@ export default function SharePage({ customerId }) {
             })}
           </div>
         )}
+
+        {/* Your actions */}
+        {latestEngagement && (() => {
+          const customerTasks = [];
+          STAGE_KEYS.forEach(sk => {
+            (latestEngagement.stageTasks?.[sk] || [])
+              .filter(t => t.owner === "customer")
+              .forEach(t => customerTasks.push({ ...t, stageKey: sk }));
+          });
+          if (!customerTasks.length) return null;
+          const pending = customerTasks.filter(t => !t.done);
+          return (
+            <div style={S.card}>
+              <div style={S.cardHead}>
+                <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#111827" }}>
+                  Your actions
+                </span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: pending.length > 0 ? "#D97706" : "#16A34A" }}>
+                  {pending.length > 0 ? `${pending.length} pending` : "✓ All complete"}
+                </span>
+              </div>
+              {customerTasks.map((t, i) => {
+                const stage = STAGES.find(s => s.key === t.stageKey);
+                return (
+                  <div key={i} style={{
+                    display: "flex", gap: 14, padding: "14px 20px",
+                    borderBottom: i < customerTasks.length - 1 ? "1px solid #F3F4F6" : "none",
+                    opacity: t.done ? 0.55 : 1,
+                  }}>
+                    {/* Status circle */}
+                    <div style={{ paddingTop: 2, flexShrink: 0 }}>
+                      <div style={{
+                        width: 20, height: 20, borderRadius: "50%",
+                        background: t.done ? "#16A34A" : "#F3F4F6",
+                        border: `2px solid ${t.done ? "#16A34A" : "#D1D5DB"}`,
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>
+                        {t.done && <span style={{ fontSize: 10, color: "white", fontWeight: 700 }}>✓</span>}
+                      </div>
+                    </div>
+                    {/* Text */}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: "#111827", textDecoration: t.done ? "line-through" : "none" }}>
+                          {t.title}
+                        </p>
+                        {stage && (
+                          <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 999, background: stage.colour + "18", color: stage.colour, fontWeight: 600 }}>
+                            {stage.shortLabel}
+                          </span>
+                        )}
+                      </div>
+                      {t.customerNote && (
+                        <p style={{ fontSize: 12, color: "#4B5563", lineHeight: 1.65 }}>{t.customerNote}</p>
+                      )}
+                      {(t.startDate || t.endDate) && (
+                        <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 5 }}>
+                          {t.startDate && `Start: ${fmtDate(t.startDate)}`}
+                          {t.startDate && t.endDate && " · "}
+                          {t.endDate && `Due: ${fmtDate(t.endDate)}`}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Account team */}
         {(customer.csmName || customer.comName) && (

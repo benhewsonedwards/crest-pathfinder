@@ -15,51 +15,73 @@ import {
 import IntegrationModal from "../components/IntegrationModal";
 
 // ─── Mini Gantt for shareable view ────────────────────────────────────────────
+const LABEL_W = 130; // px — must match the label span width below
+
 function MiniGantt({ stageTasks }) {
   const allTasks = [];
   STAGE_KEYS.forEach(sk => (stageTasks?.[sk] || []).forEach(t => allTasks.push({ ...t, stageKey: sk })));
-  if (allTasks.length === 0) return <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No tasks defined</p>;
+  const dated = allTasks.filter(t => t.startDate || t.endDate);
+  if (!dated.length) return <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No tasks with dates yet</p>;
 
-  const allDates = allTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
-  if (!allDates.length) return null;
-
+  const allDates = dated.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
   const minDate = new Date(allDates[0]);
   const maxDate = new Date(allDates[allDates.length - 1]);
   minDate.setDate(minDate.getDate() - 1);
   maxDate.setDate(maxDate.getDate() + 2);
-  const total = Math.round((maxDate - minDate) / 86400000);
+  const span = maxDate - minDate;
 
-  function xPct(iso) { return ((new Date(iso) - minDate) / (maxDate - minDate)) * 100; }
-  const todayPct = xPct(new Date().toISOString().slice(0,10));
+  function xPct(iso) { return ((new Date(iso) - minDate) / span) * 100; }
+  const todayPct = xPct(new Date().toISOString().slice(0, 10));
   const showToday = todayPct > 0 && todayPct < 100;
 
   return (
     <div style={{ overflowX: "auto" }}>
-      <div style={{ minWidth: 500, position: "relative" }}>
-        {showToday && (
-          <div style={{ position: "absolute", top: 0, bottom: 0, left: `${todayPct}%`, width: 1.5, background: "var(--amber)", zIndex: 2, opacity: 0.7 }} />
-        )}
-        {allTasks.map((t, i) => {
+      <div style={{ minWidth: 500 }}>
+        {dated.map((t, i) => {
           const colour = stageColour(t.stageKey);
-          const x1 = xPct(t.startDate || new Date().toISOString().slice(0,10));
-          const x2 = xPct(t.endDate || new Date().toISOString().slice(0,10));
-          const w = Math.max(x2 - x1, 1);
+          const x1 = xPct(t.startDate || t.endDate);
+          const x2 = xPct(t.endDate || t.startDate);
+          const w = Math.max(x2 - x1, 1.5);
           return (
             <div key={i} style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
-              <span style={{ fontSize: 10, color: "var(--text-muted)", width: 130, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</span>
+              {/* Fixed-width label */}
+              <span style={{
+                fontSize: 10, color: "var(--text-muted)",
+                width: LABEL_W, flexShrink: 0,
+                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                paddingRight: 8,
+              }}>{t.title}</span>
+              {/* Bar area — today line lives here */}
               <div style={{ flex: 1, position: "relative", height: 14 }}>
-                <div style={{ position: "absolute", left: `${x1}%`, width: `${w}%`, height: "100%",
-                  background: t.done ? colour + "40" : colour + "70", borderRadius: 3,
-                  borderLeft: `2px solid ${colour}` }} />
-                {t.done && (
-                  <div style={{ position: "absolute", left: `${x1}%`, width: `${w}%`, height: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <span style={{ fontSize: 8, color: colour }}>✓</span>
-                  </div>
+                {showToday && (
+                  <div style={{
+                    position: "absolute", top: 0, bottom: 0,
+                    left: `${todayPct}%`, width: 1.5,
+                    background: "var(--amber)", zIndex: 2, opacity: 0.8,
+                  }} />
                 )}
+                <div style={{
+                  position: "absolute", left: `${x1}%`, width: `${w}%`, height: "100%",
+                  background: t.done ? colour + "40" : colour + "70",
+                  borderRadius: 3, borderLeft: `2px solid ${colour}`,
+                }} />
               </div>
             </div>
           );
         })}
+        {/* Today label under the chart */}
+        {showToday && (
+          <div style={{ display: "flex", marginTop: 2 }}>
+            <div style={{ width: LABEL_W, flexShrink: 0 }} />
+            <div style={{ flex: 1, position: "relative", height: 12 }}>
+              <span style={{
+                position: "absolute", left: `${todayPct}%`,
+                transform: "translateX(-50%)",
+                fontSize: 8, color: "var(--amber)", fontWeight: 700, whiteSpace: "nowrap",
+              }}>TODAY</span>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -183,6 +205,81 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
           })}
         </Card>
       )}
+
+      {/* ── Your actions ── */}
+      {latestEngagement && (() => {
+        // Collect all customer-owned tasks across all stages
+        const customerTasks = [];
+        STAGE_KEYS.forEach(sk => {
+          (latestEngagement.stageTasks?.[sk] || [])
+            .filter(t => t.owner === "customer")
+            .forEach(t => customerTasks.push({ ...t, stageKey: sk }));
+        });
+        if (!customerTasks.length) return null;
+
+        const pending = customerTasks.filter(t => !t.done);
+        const done = customerTasks.filter(t => t.done);
+
+        return (
+          <Card style={{ marginBottom: 16 }}>
+            <CardHeader>
+              <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>Your actions</span>
+              <span style={{ fontSize: 11, color: pending.length > 0 ? "var(--amber)" : "var(--green)", fontWeight: 600 }}>
+                {pending.length > 0 ? `${pending.length} pending` : "✓ All complete"}
+              </span>
+            </CardHeader>
+            {customerTasks.map((t, i) => {
+              const stage = STAGES.find(s => s.key === t.stageKey);
+              return (
+                <div key={i} style={{
+                  display: "flex", gap: 14, padding: "14px 18px",
+                  borderBottom: i < customerTasks.length - 1 ? "1px solid var(--border)" : "none",
+                  opacity: t.done ? 0.6 : 1,
+                }}>
+                  {/* Status dot */}
+                  <div style={{ paddingTop: 2, flexShrink: 0 }}>
+                    <div style={{
+                      width: 18, height: 18, borderRadius: "50%",
+                      background: t.done ? "var(--green)" : "var(--surface2)",
+                      border: `2px solid ${t.done ? "var(--green)" : "var(--border)"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {t.done && <span style={{ fontSize: 9, color: "white", fontWeight: 700 }}>✓</span>}
+                    </div>
+                  </div>
+                  {/* Content */}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                      <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", textDecoration: t.done ? "line-through" : "none" }}>
+                        {t.title}
+                      </p>
+                      {stage && (
+                        <span style={{ fontSize: 10, padding: "1px 7px", borderRadius: 999, background: stage.colour + "15", color: stage.colour, fontWeight: 600 }}>
+                          {stage.shortLabel}
+                        </span>
+                      )}
+                    </div>
+                    {/* Customer note — what they actually need to do */}
+                    {t.customerNote && (
+                      <p style={{ fontSize: 12, color: "var(--text-second)", lineHeight: 1.6 }}>
+                        {t.customerNote}
+                      </p>
+                    )}
+                    {/* Dates */}
+                    {(t.startDate || t.endDate) && (
+                      <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                        {t.startDate && `Start: ${fmtDate(t.startDate)}`}
+                        {t.startDate && t.endDate && " · "}
+                        {t.endDate && `Due: ${fmtDate(t.endDate)}`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </Card>
+        );
+      })()}
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
         <Btn variant="ghost" onClick={onClose}>Close preview</Btn>
