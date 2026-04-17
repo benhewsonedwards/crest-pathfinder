@@ -11,7 +11,7 @@ export const CAPTURE_SCHEMAS = {
       { heading: "Eligibility", fields: [
         { key: "enterprise_confirmed",   label: "Enterprise plan confirmed",         type: "yesno",  critical: true  },
         { key: "ae_handover_reviewed",   label: "AE handover notes reviewed",        type: "yesno",  critical: true  },
-        { key: "prior_attempt",          label: "Prior implementation attempt?",     type: "yesno",  critical: false },
+        { key: "prior_attempt",          label: "Prior implementation attempt?",     type: "yesno",  critical: false, neutral: true },
         { key: "prior_attempt_notes",    label: "Prior attempt notes",               type: "textarea", critical: false, showIf: { key: "prior_attempt", val: "Yes" } },
       ]},
       { heading: "Engagement Type", fields: [
@@ -21,11 +21,11 @@ export const CAPTURE_SCHEMAS = {
         { key: "csi_reason",             label: "Reason / notes",                    type: "textarea", critical: false },
       ]},
       { heading: "Qualifying Flags", fields: [
-        { key: "flag_multi_bu",          label: "Multiple business units in scope",  type: "yesno",  critical: false },
-        { key: "flag_integration",       label: "Integration required to go live",   type: "yesno",  critical: false },
-        { key: "flag_large_arr",         label: "Large ARR (Enterprise tier)",       type: "yesno",  critical: false },
-        { key: "flag_multi_region",      label: "Multi-region rollout",              type: "yesno",  critical: false },
-        { key: "ta_involvement",         label: "TA involvement required",           type: "yesno",  critical: false },
+        { key: "flag_multi_bu",          label: "Multiple business units in scope",  type: "yesno",  critical: false, neutral: true },
+        { key: "flag_integration",       label: "Integration required to go live",   type: "yesno",  critical: false, neutral: true },
+        { key: "flag_large_arr",         label: "Large ARR (Enterprise tier)",       type: "yesno",  critical: false, neutral: true },
+        { key: "flag_multi_region",      label: "Multi-region rollout",              type: "yesno",  critical: false, neutral: true },
+        { key: "ta_involvement",         label: "TA involvement required",           type: "yesno",  critical: false, neutral: true },
       ]},
     ],
   },
@@ -69,7 +69,7 @@ export const CAPTURE_SCHEMAS = {
         { key: "sso_flow",               label: "SSO flow type",                     type: "select", critical: false,
           options: ["SP-initiated (default)","IdP-initiated"] },
         { key: "metadata_received",      label: "IdP metadata XML / URL received",   type: "yesno",  critical: true  },
-        { key: "mfa_policy",             label: "MFA enforced at IdP level?",        type: "yesno",  critical: false },
+        { key: "mfa_policy",             label: "MFA enforced at IdP level?",        type: "yesno",  critical: false, neutral: true },
         { key: "deprov_policy",          label: "Deprovisioning policy",             type: "select", critical: false,
           options: ["Deactivate user","Delete user","Manual review"] },
         { key: "it_admin_confirmed",     label: "IT admin confirmed for session 1",  type: "yesno",  critical: true  },
@@ -112,9 +112,9 @@ export const CAPTURE_SCHEMAS = {
         { key: "session3_date",          label: "Session 3 — Testing / go-live date", type: "date",   critical: false },
       ]},
       { heading: "Escalation Flags", fields: [
-        { key: "esc_custom_api",         label: "Custom API development needed → Product", type: "yesno", critical: false },
-        { key: "esc_sap_bapi",           label: "SAP BAPI/RFC integration → TA / middleware", type: "yesno", critical: false },
-        { key: "esc_data_residency",     label: "Data residency requirements → Legal", type: "yesno",  critical: false },
+        { key: "esc_custom_api",         label: "Custom API development needed → Product", type: "yesno", critical: false, neutral: true },
+        { key: "esc_sap_bapi",           label: "SAP BAPI/RFC integration → TA / middleware", type: "yesno", critical: false, neutral: true },
+        { key: "esc_data_residency",     label: "Data residency requirements → Legal", type: "yesno",  critical: false, neutral: true },
         { key: "escalation_notes",       label: "Escalation notes",                   type: "textarea", critical: false },
       ]},
     ],
@@ -129,7 +129,7 @@ export const CAPTURE_SCHEMAS = {
         { key: "recap_email_sent",       label: "Recap email sent within 24h",        type: "yesnodate", critical: true  },
         { key: "sessions_scheduled",     label: "All sessions scheduled",             type: "yesno",     critical: true  },
         { key: "crm_updated",            label: "CRM updated (use case, go-live, stakeholders)", type: "yesno", critical: true },
-        { key: "integration_flagged",    label: "Integration requirements flagged to CSE", type: "yesno", critical: false },
+        { key: "integration_flagged",    label: "Integration requirements flagged to CSE", type: "yesno", critical: false, neutral: true },
       ]},
       { heading: "Customer Homework", fields: [
         { key: "user_list_received",     label: "User list received",                 type: "yesnodate", critical: true  },
@@ -144,7 +144,7 @@ export const CAPTURE_SCHEMAS = {
         { key: "training_format",        label: "End-user training format",           type: "select", critical: true,
           options: ["Virtual sessions","In-person","Train-the-trainer","Self-serve"] },
         { key: "capacity_constraints",   label: "Customer blackouts / constraints",   type: "textarea", critical: false },
-        { key: "large_rollout",          label: "Large / complex rollout (phasing required)?", type: "yesno", critical: false },
+        { key: "large_rollout",          label: "Large / complex rollout (phasing required)?", type: "yesno", critical: false, neutral: true },
       ]},
     ],
   },
@@ -169,7 +169,7 @@ export const CAPTURE_SCHEMAS = {
       ]},
       { heading: "Risk Log", fields: [
         { key: "open_risks",             label: "Open technical risks not resolved",  type: "textarea", critical: false },
-        { key: "risks_flagged_csm",      label: "Open risks flagged to CSM",          type: "yesno",  critical: false },
+        { key: "risks_flagged_csm",      label: "Open risks flagged to CSM",          type: "yesno",  critical: false, neutral: true },
         { key: "post_issues_covered",    label: "Post-engagement issues covered in handover", type: "yesno", critical: true },
       ]},
     ],
@@ -187,14 +187,14 @@ export const CAPTURE_SCHEMAS = {
         { key: "runbook_delivered",      label: "Config runbook delivered to IT contact", type: "yesno", critical: true },
         { key: "sf_closed",              label: "Engagement closed in Salesforce",    type: "yesno",  critical: true  },
         { key: "csm_handover_complete",  label: "CSM handover complete",              type: "yesno",  critical: true  },
-        { key: "expansion_noted",        label: "Expansion opportunities identified", type: "yesno",  critical: false },
+        { key: "expansion_noted",        label: "Expansion opportunities identified", type: "yesno",  critical: false, neutral: true },
         { key: "expansion_notes",        label: "Expansion notes",                    type: "textarea", critical: false, showIf: { key: "expansion_noted", val: "Yes" } },
       ]},
       { heading: "Post-Engagement Watch", fields: [
         { key: "sso_cert_expiry",        label: "SSO certificate expiry date",        type: "date",   critical: false },
-        { key: "api_token_rotation",     label: "API token rotation schedule noted",  type: "yesno",  critical: false },
-        { key: "scim_monitoring",        label: "SCIM provisioning monitoring advised", type: "yesno", critical: false },
-        { key: "rate_limit_briefed",     label: "API rate limit expectations set",    type: "yesno",  critical: false },
+        { key: "api_token_rotation",     label: "API token rotation schedule noted",  type: "yesno",  critical: false, neutral: true },
+        { key: "scim_monitoring",        label: "SCIM provisioning monitoring advised", type: "yesno", critical: false, neutral: true },
+        { key: "rate_limit_briefed",     label: "API rate limit expectations set",    type: "yesno",  critical: false, neutral: true },
       ]},
     ],
   },
@@ -210,7 +210,7 @@ export const CAPTURE_SCHEMAS = {
       ]},
       { heading: "Renewal", fields: [
         { key: "renewal_date",           label: "Renewal date",                       type: "date",   critical: false },
-        { key: "renewal_risk",           label: "Renewal at risk?",                   type: "yesno",  critical: false },
+        { key: "renewal_risk",           label: "Renewal at risk?",                   type: "yesno",  critical: false, neutral: true },
         { key: "expansion_opportunity",  label: "Expansion opportunity notes",        type: "textarea", critical: false },
       ]},
     ],
@@ -272,14 +272,27 @@ function CaptureField({ field, value, onChange, allData }) {
     <div style={{ marginBottom: 12 }}>
       {labelEl}
       <div style={{ display: "flex", gap: 6 }}>
-        {["Yes", "No"].map(opt => (
-          <button key={opt} onClick={() => onChange(value === opt ? "" : opt)} style={{
-            padding: "5px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-            border: `1px solid ${value === opt ? (opt === "Yes" ? "var(--green)" : "var(--red)") : "var(--border)"}`,
-            background: value === opt ? (opt === "Yes" ? "var(--green-light)" : "var(--red-light)") : "var(--surface)",
-            color: value === opt ? (opt === "Yes" ? "var(--green)" : "var(--red)") : "var(--text-second)",
-          }}>{opt}</button>
-        ))}
+        {["Yes", "No"].map(opt => {
+          const isSelected = value === opt;
+          let bg, border, color;
+          if (isSelected) {
+            if (field.neutral) {
+              bg = "var(--purple-light)"; border = "var(--purple)"; color = "var(--purple)";
+            } else {
+              bg = opt === "Yes" ? "var(--green-light)" : "var(--red-light)";
+              border = opt === "Yes" ? "var(--green)" : "var(--red)";
+              color = opt === "Yes" ? "var(--green)" : "var(--red)";
+            }
+          } else {
+            bg = "var(--surface)"; border = "var(--border)"; color = "var(--text-second)";
+          }
+          return (
+            <button key={opt} onClick={() => onChange(value === opt ? "" : opt)} style={{
+              padding: "5px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+              border: `1px solid ${border}`, background: bg, color,
+            }}>{opt}</button>
+          );
+        })}
         {value && <button onClick={() => onChange("")} style={{ padding: "5px 8px", borderRadius: 6, fontSize: 11, cursor: "pointer", background: "none", border: "1px solid var(--border)", color: "var(--text-muted)", fontFamily: "inherit" }}>clear</button>}
       </div>
       {warn && <p style={{ fontSize: 10, color: "var(--amber)", marginTop: 3 }}>⚠ Required before advancing stage</p>}
@@ -294,14 +307,27 @@ function CaptureField({ field, value, onChange, allData }) {
         {labelEl}
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: 6 }}>
-            {["Yes", "No"].map(opt => (
-              <button key={opt} onClick={() => upd("yn", p.yn === opt ? "" : opt)} style={{
-                padding: "5px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
-                border: `1px solid ${p.yn === opt ? (opt === "Yes" ? "var(--green)" : "var(--red)") : "var(--border)"}`,
-                background: p.yn === opt ? (opt === "Yes" ? "var(--green-light)" : "var(--red-light)") : "var(--surface)",
-                color: p.yn === opt ? (opt === "Yes" ? "var(--green)" : "var(--red)") : "var(--text-second)",
-              }}>{opt}</button>
-            ))}
+            {["Yes", "No"].map(opt => {
+              const isSelected = p.yn === opt;
+              let bg, border, color;
+              if (isSelected) {
+                if (field.neutral) {
+                  bg = "var(--purple-light)"; border = "var(--purple)"; color = "var(--purple)";
+                } else {
+                  bg = opt === "Yes" ? "var(--green-light)" : "var(--red-light)";
+                  border = opt === "Yes" ? "var(--green)" : "var(--red)";
+                  color = opt === "Yes" ? "var(--green)" : "var(--red)";
+                }
+              } else {
+                bg = "var(--surface)"; border = "var(--border)"; color = "var(--text-second)";
+              }
+              return (
+                <button key={opt} onClick={() => upd("yn", p.yn === opt ? "" : opt)} style={{
+                  padding: "5px 14px", borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+                  border: `1px solid ${border}`, background: bg, color,
+                }}>{opt}</button>
+              );
+            })}
           </div>
           {p.yn === "Yes" && (
             <input type="date" value={p.date || ""} onChange={e => upd("date", e.target.value)}
