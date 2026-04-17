@@ -4,7 +4,8 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import {
   STAGES, STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES,
-  buildDefaultTasks, fmtDate, fmtDateTime, stageColour, todayIso, workingDayAdd, diffDays
+  buildDefaultTasks, buildAllStageTasks, rippleTasks, rippleAllStages, stageEndDate,
+  fmtDate, fmtDateTime, stageColour, todayIso, workingDayAdd, diffDays
 } from "../lib/constants";
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
@@ -199,19 +200,41 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   async function updateTask(stageKey, taskIdx, updates) {
     const tasks = [...(engagement.stageTasks?.[stageKey] || [])];
     tasks[taskIdx] = { ...tasks[taskIdx], ...updates };
-    await save({ [`stageTasks.${stageKey}`]: tasks });
+
+    // If a date changed, ripple within the stage and then forward across all stages
+    const dateChanged = "startDate" in updates || "endDate" in updates || "done" in updates;
+    if (dateChanged) {
+      const rippled = rippleAllStages(
+        { ...engagement.stageTasks, [stageKey]: rippleTasks(tasks) },
+        stageKey
+      );
+      // Build a flat Firestore update for all affected stages
+      const firestoreUpdates = {};
+      STAGE_KEYS.forEach(sk => {
+        if (rippled[sk] && engagement.stageTasks?.[sk]) {
+          firestoreUpdates[`stageTasks.${sk}`] = rippled[sk];
+        }
+      });
+      await save(firestoreUpdates);
+    } else {
+      await save({ [`stageTasks.${stageKey}`]: tasks });
+    }
   }
 
   async function deleteTask(stageKey, taskIdx) {
     const tasks = (engagement.stageTasks?.[stageKey] || []).filter((_, i) => i !== taskIdx);
-    await save({ [`stageTasks.${stageKey}`]: tasks });
+    const rippled = rippleAllStages({ ...engagement.stageTasks, [stageKey]: tasks }, stageKey);
+    const firestoreUpdates = {};
+    STAGE_KEYS.forEach(sk => { firestoreUpdates[`stageTasks.${sk}`] = rippled[sk] || []; });
+    await save(firestoreUpdates);
   }
 
   async function addTask(stageKey) {
     const tasks = engagement.stageTasks?.[stageKey] || [];
-    const lastEnd = tasks.length > 0 ? tasks[tasks.length - 1].endDate : todayIso();
+    const lastEnd = stageEndDate(tasks) || todayIso();
     const newTask = {
-      id: stageKey + "-" + Date.now(), title: "New task", ownerRole: null, ownerUid: null,
+      id: stageKey + "-" + Date.now(), title: "New task",
+      owner: null, ownerRole: null, ownerUid: null,
       startDate: workingDayAdd(lastEnd, 1), endDate: workingDayAdd(lastEnd, 3),
       required: false, done: false, notes: "",
     };
@@ -219,7 +242,15 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   }
 
   async function loadDefaults(stageKey) {
-    await save({ [`stageTasks.${stageKey}`]: buildDefaultTasks(stageKey) });
+    // Reload this stage's defaults starting from where the previous stage ended
+    const prevKey = STAGE_KEYS[STAGE_KEYS.indexOf(stageKey) - 1];
+    const prevEnd = prevKey ? stageEndDate(engagement.stageTasks?.[prevKey] || []) : null;
+    const startDate = prevEnd ? workingDayAdd(prevEnd, 1) : todayIso();
+    const newTasks = buildDefaultTasks(stageKey, startDate);
+    const rippled = rippleAllStages({ ...engagement.stageTasks, [stageKey]: newTasks }, stageKey);
+    const firestoreUpdates = {};
+    STAGE_KEYS.forEach(sk => { firestoreUpdates[`stageTasks.${sk}`] = rippled[sk] || []; });
+    await save(firestoreUpdates);
   }
 
   async function advanceStage() {
@@ -227,8 +258,12 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
     if (idx >= STAGE_KEYS.length - 1) return;
     const nextKey = STAGE_KEYS[idx + 1];
     const updates = { currentStage: nextKey };
+
     if (!(engagement.stageTasks?.[nextKey]?.length)) {
-      updates[`stageTasks.${nextKey}`] = buildDefaultTasks(nextKey);
+      // Start next stage the working day after current stage ends (or today)
+      const currentEnd = stageEndDate(engagement.stageTasks?.[engagement.currentStage] || []);
+      const nextStart = currentEnd ? workingDayAdd(currentEnd, 1) : todayIso();
+      updates[`stageTasks.${nextKey}`] = buildDefaultTasks(nextKey, nextStart);
     }
     await save(updates);
     setActiveStage(nextKey);

@@ -143,9 +143,97 @@ export const TASK_TEMPLATES = {
 export function todayIso() { return new Date().toISOString().slice(0, 10); }
 
 export function workingDayAdd(iso, n) {
+  if (!iso) return todayIso();
   let d = new Date(iso), added = 0;
   while (added < n) { d.setDate(d.getDate() + 1); if (d.getDay() !== 0 && d.getDay() !== 6) added++; }
   return d.toISOString().slice(0, 10);
+}
+
+// Return the last endDate in a task array (or null if none)
+export function stageEndDate(tasks) {
+  const ends = (tasks || []).map(t => t.endDate).filter(Boolean).sort();
+  return ends.length > 0 ? ends[ends.length - 1] : null;
+}
+
+// ─── Ripple: shift tasks[fromIdx..] so each starts the working day after the previous ends.
+// Returns a NEW array — does NOT mutate. Only shifts tasks that follow fromIdx.
+// Preserves done tasks' dates (a done task is an anchor — it constrains what follows it,
+// but we don't move it).
+export function rippleTasks(tasks) {
+  if (!tasks || tasks.length === 0) return tasks;
+  const out = tasks.map(t => ({ ...t }));
+  for (let i = 1; i < out.length; i++) {
+    const prev = out[i - 1];
+    if (!prev.endDate) continue;               // can't ripple without an anchor
+    if (out[i].done) continue;                 // done tasks are frozen anchors
+    const minStart = workingDayAdd(prev.endDate, 1);
+    if (out[i].startDate && out[i].startDate >= minStart) continue; // already OK
+    // Need to shift this task
+    const duration = out[i].startDate && out[i].endDate
+      ? diffDays(out[i].startDate, out[i].endDate)
+      : 2; // fallback 2 working days
+    out[i] = {
+      ...out[i],
+      startDate: minStart,
+      endDate: workingDayAdd(minStart, Math.max(duration, 1)),
+    };
+  }
+  return out;
+}
+
+// ─── Ripple across all stages: given the full stageTasks map and the key of the
+// stage that changed, re-chain all subsequent stages so no stage starts before
+// the previous one ends. Returns a new stageTasks object.
+export function rippleAllStages(stageTasks, changedStageKey) {
+  const result = {};
+  STAGE_KEYS.forEach(sk => { result[sk] = (stageTasks[sk] || []).map(t => ({ ...t })); });
+
+  // First, ripple within the changed stage
+  result[changedStageKey] = rippleTasks(result[changedStageKey]);
+
+  // Then ripple forward stage by stage from the changed stage onwards
+  const changedIdx = STAGE_KEYS.indexOf(changedStageKey);
+  for (let si = Math.max(changedIdx, 0); si < STAGE_KEYS.length - 1; si++) {
+    const thisKey = STAGE_KEYS[si];
+    const nextKey = STAGE_KEYS[si + 1];
+    const thisEnd = stageEndDate(result[thisKey]);
+    if (!thisEnd) continue;
+
+    const nextTasks = result[nextKey];
+    if (!nextTasks || nextTasks.length === 0) continue;
+
+    const firstNext = nextTasks.find(t => !t.done);
+    if (!firstNext) continue;
+
+    const minNextStart = workingDayAdd(thisEnd, 1);
+    const firstStart = firstNext.startDate || minNextStart;
+    if (firstStart >= minNextStart) {
+      // Stage already starts after previous ends — just ripple within it
+      result[nextKey] = rippleTasks(nextTasks);
+      continue;
+    }
+
+    // Stage needs shifting forward. Calculate calendar day delta to apply to each task date.
+    const deltaMs = new Date(minNextStart) - new Date(firstStart);
+    const shiftFn = (iso) => {
+      if (!iso) return iso;
+      const d = new Date(iso);
+      d.setTime(d.getTime() + deltaMs);
+      // Snap forward to next working day if we landed on a weekend
+      while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+      return d.toISOString().slice(0, 10);
+    };
+
+    result[nextKey] = nextTasks.map(t => t.done ? t : {
+      ...t,
+      startDate: shiftFn(t.startDate),
+      endDate:   shiftFn(t.endDate),
+    });
+
+    // Then ripple within the shifted stage to handle any internal gaps
+    result[nextKey] = rippleTasks(result[nextKey]);
+  }
+  return result;
 }
 
 export function buildDefaultTasks(stageKey, startDate = todayIso()) {
@@ -155,8 +243,8 @@ export function buildDefaultTasks(stageKey, startDate = todayIso()) {
     const task = {
       id: stageKey + "-" + i + "-" + Date.now(),
       title: t.title,
-      owner: t.owner,          // used by shareable view to identify customer tasks
-      ownerRole: t.owner,      // kept for backwards compat with existing UI
+      owner: t.owner,
+      ownerRole: t.owner,
       ownerUid: null,
       startDate: cursor,
       endDate: workingDayAdd(cursor, t.durationDays),
@@ -168,6 +256,20 @@ export function buildDefaultTasks(stageKey, startDate = todayIso()) {
     cursor = workingDayAdd(task.endDate, 1);
     return task;
   });
+}
+
+// Build tasks for ALL stages in sequence, each starting the day after the previous ends.
+// Returns the full stageTasks map.
+export function buildAllStageTasks(startDate = todayIso()) {
+  const result = {};
+  let cursor = startDate;
+  for (const sk of STAGE_KEYS) {
+    const tasks = buildDefaultTasks(sk, cursor);
+    result[sk] = tasks;
+    const end = stageEndDate(tasks);
+    cursor = end ? workingDayAdd(end, 1) : cursor;
+  }
+  return result;
 }
 
 export function diffDays(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }

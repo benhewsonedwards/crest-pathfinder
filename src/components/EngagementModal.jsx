@@ -2,7 +2,7 @@ import { useState } from "react";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
-import { STAGES, REGIONS, SEGMENTS, SUBSCRIPTIONS, OPP_TYPES, TSHIRT_SIZES, CURRENCIES, PLAN_TYPES, RAG_STATUSES, SC_MODULES, INTEGRATIONS, buildDefaultTasks, todayIso } from "../lib/constants";
+import { STAGES, REGIONS, SEGMENTS, SUBSCRIPTIONS, OPP_TYPES, TSHIRT_SIZES, CURRENCIES, PLAN_TYPES, RAG_STATUSES, SC_MODULES, INTEGRATIONS, buildDefaultTasks, buildAllStageTasks, todayIso } from "../lib/constants";
 import { Modal, Btn, Input, Select, Textarea, FieldGroup, Label, Pill } from "../components/UI";
 
 const BLANK = {
@@ -257,7 +257,7 @@ export default function EngagementModal({ open, onClose, initial, users, custome
       if (isEdit) {
         await updateDoc(doc(db, "engagements", initial.id), { ...form, updatedAt: serverTimestamp() });
       } else {
-        const stageTasks = { [form.currentStage]: buildDefaultTasks(form.currentStage, todayIso()) };
+        const stageTasks = buildAllStageTasks(todayIso());
         await addDoc(collection(db, "engagements"), {
           ...form, stageTasks, createdBy: user.uid,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
