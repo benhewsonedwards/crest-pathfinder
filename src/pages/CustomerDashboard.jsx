@@ -195,7 +195,7 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
 }
 
 // ─── Main customer dashboard ──────────────────────────────────────────────────
-export default function CustomerDashboard({ customer, onBack, users }) {
+export default function CustomerDashboard({ customer, onBack, users, onEditCustomer }) {
   const { profile } = useAuth();
   const [integrations, setIntegrations] = useState([]);
   const [engagements, setEngagements] = useState([]);
@@ -289,6 +289,9 @@ export default function CustomerDashboard({ customer, onBack, users }) {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn variant="ghost" onClick={() => setShowShareable(true)}>👁 Preview shareable view</Btn>
+          {canEdit && onEditCustomer && (
+            <Btn variant="ghost" onClick={() => onEditCustomer(customer)}>✎ Edit customer</Btn>
+          )}
           {canEdit && <Btn onClick={() => setShowNewIntegration(true)}>+ New integration</Btn>}
         </div>
       </div>

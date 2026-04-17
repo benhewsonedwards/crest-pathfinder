@@ -134,6 +134,14 @@ function AppShell() {
             customer={selectedCustomer}
             onBack={() => { setSelectedCustomer(null); setPage("customers"); }}
             users={users}
+            onEditCustomer={(c) => {
+              // Navigate back to customers list; CustomersPage will show edit modal
+              // We use a URL-style signal via a ref so CustomersPage can pick it up
+              setSelectedCustomer(null);
+              setPage("customers");
+              // Small delay so CustomersPage mounts before we try to trigger edit
+              setTimeout(() => window.dispatchEvent(new CustomEvent("crest:editCustomer", { detail: c })), 100);
+            }}
           />
         /* Pages */
         ) : page === "customers" ? (

@@ -31,6 +31,14 @@ function StatBubble({ label, value, colour }) {
   );
 }
 
+const BLANK_CUSTOMER = {
+  name: "", sfAccountId: "", region: "EMEA", segment: "Enterprise",
+  subscription: "Enterprise", arr: "", currency: "GBP £",
+  industry: "", website: "", employees: "",
+  csmName: "", comName: "", aeName: "",
+  scOrgRoleId: "", periscopeLink: "", notes: "",
+};
+
 export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const { profile } = useAuth();
   const [customers, setCustomers] = useState([]);
@@ -40,16 +48,53 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const [search, setSearch] = useState("");
   const [segFilter, setSegFilter] = useState("");
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({
-    name: "", sfAccountId: "", region: "EMEA", segment: "Enterprise",
-    subscription: "Enterprise", arr: "", currency: "GBP £",
-    industry: "", website: "", employees: "",
-    csmName: "", comName: "", aeName: "",
-    scOrgRoleId: "", periscopeLink: "", notes: "",
-  });
+  const [form, setForm] = useState(BLANK_CUSTOMER);
   const [saving, setSaving] = useState(false);
+  const [editTarget, setEditTarget] = useState(null);
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
+
+  function openCreate() {
+    setForm(BLANK_CUSTOMER);
+    setEditTarget(null);
+    setShowNew(true);
+  }
+
+  function openEdit(customer, e) {
+    e.stopPropagation(); // don't navigate to dashboard
+    setForm({
+      name:         customer.name         || "",
+      sfAccountId:  customer.sfAccountId  || "",
+      region:       customer.region       || "EMEA",
+      segment:      customer.segment      || "Enterprise",
+      subscription: customer.subscription || "Enterprise",
+      arr:          customer.arr          || "",
+      currency:     customer.currency     || "GBP £",
+      industry:     customer.industry     || "",
+      website:      customer.website      || "",
+      employees:    customer.employees    || "",
+      csmName:      customer.csmName      || "",
+      comName:      customer.comName      || "",
+      aeName:       customer.aeName       || "",
+      scOrgRoleId:  customer.scOrgRoleId  || "",
+      periscopeLink:customer.periscopeLink|| "",
+      notes:        customer.notes        || "",
+    });
+    setEditTarget(customer);
+    setShowNew(true);
+  }
+
+  function closeModal() {
+    setShowNew(false);
+    setEditTarget(null);
+    setForm(BLANK_CUSTOMER);
+  }
+
+  useEffect(() => {
+    function handleEditEvent(e) { openEdit(e.detail, { stopPropagation: () => {} }); }
+    window.addEventListener("crest:editCustomer", handleEditEvent);
+    return () => window.removeEventListener("crest:editCustomer", handleEditEvent);
+  }, []);
 
   useEffect(() => {
     // Set a fallback timeout so we never get stuck on spinner
@@ -107,14 +152,19 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const liveIntegrations = integrations.filter(i => i.status === "live" || i.status === "live-attention").length;
   const needsAttention = integrations.filter(i => i.status === "broken" || i.status === "live-attention").length;
 
-  async function createCustomer() {
+  async function saveCustomer() {
     if (!form.name.trim()) return;
     setSaving(true);
-    await addDoc(collection(db, "customers"), {
-      ...form, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-    });
-    setShowNew(false);
-    setForm({ name: "", sfAccountId: "", region: "EMEA", segment: "Enterprise", subscription: "Enterprise", arr: "", currency: "GBP £", industry: "", website: "", employees: "", csmName: "", comName: "", aeName: "", scOrgRoleId: "", periscopeLink: "", notes: "" });
+    if (editTarget?.id) {
+      await updateDoc(doc(db, "customers", editTarget.id), {
+        ...form, updatedAt: serverTimestamp(),
+      });
+    } else {
+      await addDoc(collection(db, "customers"), {
+        ...form, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+      });
+    }
+    closeModal();
     setSaving(false);
   }
 
@@ -132,7 +182,7 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
           <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 2 }}>Customers</h1>
           <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{customers.length} accounts · {totalIntegrations} integrations</p>
         </div>
-        {canEdit && <Btn onClick={() => setShowNew(true)}>+ New customer</Btn>}
+        {canEdit && <Btn onClick={openCreate}>+ New customer</Btn>}
       </div>
 
       {/* Stats row */}
@@ -161,7 +211,7 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
       {/* Customer list */}
       {filtered.length === 0 ? (
         <EmptyState icon="🏢" title="No customers yet" description="Add your first customer to start tracking their engagement and integration history"
-          action={canEdit && <Btn onClick={() => setShowNew(true)}>+ New customer</Btn>} />
+          action={canEdit && <Btn onClick={openCreate}>+ New customer</Btn>} />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {filtered.map(customer => {
@@ -208,7 +258,19 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
                     <StatBubble label="Engagements" value={engs.length} colour="var(--blue)" />
                   </div>
 
-                  <span style={{ color: "var(--text-muted)", fontSize: 18, marginLeft: 8 }}>›</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginLeft: 8, flexShrink: 0 }}>
+                    {canEdit && (
+                      <button
+                        onClick={e => openEdit(customer, e)}
+                        style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "4px 10px", fontFamily: "inherit", transition: "all 0.13s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--purple)"; e.currentTarget.style.color = "var(--purple)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                      >
+                        Edit
+                      </button>
+                    )}
+                    <span style={{ color: "var(--text-muted)", fontSize: 18 }}>›</span>
+                  </div>
                 </div>
 
                 {/* Integration pills */}
@@ -235,8 +297,8 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
         </div>
       )}
 
-      {/* New customer modal */}
-      <Modal open={showNew} onClose={() => setShowNew(false)} title="New customer" width={580}>
+      {/* Create / Edit customer modal */}
+      <Modal open={showNew} onClose={closeModal} title={editTarget ? `Edit — ${editTarget.name}` : "New customer"} width={580}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div style={{ gridColumn: "1 / -1" }}>
             <FieldGroup label="Customer name" required>
@@ -261,8 +323,10 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>
-          <Btn variant="ghost" onClick={() => setShowNew(false)}>Cancel</Btn>
-          <Btn onClick={createCustomer} disabled={saving || !form.name.trim()}>{saving ? "Saving..." : "Create customer"}</Btn>
+          <Btn variant="ghost" onClick={closeModal}>Cancel</Btn>
+          <Btn onClick={saveCustomer} disabled={saving || !form.name.trim()}>
+            {saving ? "Saving..." : editTarget ? "Save changes" : "Create customer"}
+          </Btn>
         </div>
       </Modal>
     </div>
