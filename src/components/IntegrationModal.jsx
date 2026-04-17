@@ -5,13 +5,13 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
+import { exportIntegrationSpec } from "../lib/exportIntegration";
 import {
   INTEGRATION_STATUSES, INTEGRATION_CATEGORIES,
   TICKET_TYPES, WORKATO_ENVS, DATA_DIRECTIONS,
   TRIGGER_TYPES, FEASIBILITY, BUSINESS_IMPACT,
   integrationStatus, ticketType
 } from "../lib/integrationConstants";
-import { INTEGRATIONS } from "../lib/constants";
 import {
   Card, CardHeader, Label, Pill, Btn, Tabs,
   Input, Select, Textarea, Modal, FieldGroup, Spinner
@@ -110,6 +110,7 @@ export default function IntegrationModal({ open, onClose, customerId, customerNa
   const [form, setForm] = useState(initial ? { ...BLANK, ...initial } : BLANK);
   const [tab, setTab] = useState("overview");
   const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [newVersion, setNewVersion] = useState({ date: new Date().toISOString().slice(0,10), version: "", description: "", author: user?.displayName || "" });
   const [addingVersion, setAddingVersion] = useState(false);
 
@@ -457,13 +458,31 @@ export default function IntegrationModal({ open, onClose, customerId, customerNa
       )}
 
       {/* Actions */}
-      <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22, borderTop: "1px solid var(--border)", paddingTop: 18 }}>
-        <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
-        {canEdit && (
-          <Btn onClick={save} disabled={saving || !form.name.trim()}>
-            {saving ? "Saving..." : isEdit ? "Save changes" : "Create integration"}
-          </Btn>
-        )}
+      <div style={{ display: "flex", gap: 10, justifyContent: "space-between", marginTop: 22, borderTop: "1px solid var(--border)", paddingTop: 18 }}>
+        {/* Export button — left side, only for existing records */}
+        <div>
+          {isEdit && (
+            <Btn
+              variant="ghost"
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true);
+                try { await exportIntegrationSpec(form); } finally { setExporting(false); }
+              }}
+            >
+              {exporting ? "Generating..." : "⬇ Export spec (.docx)"}
+            </Btn>
+          )}
+        </div>
+        {/* Save / Cancel — right side */}
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn variant="ghost" onClick={onClose}>Cancel</Btn>
+          {canEdit && (
+            <Btn onClick={save} disabled={saving || !form.name.trim()}>
+              {saving ? "Saving..." : isEdit ? "Save changes" : "Create integration"}
+            </Btn>
+          )}
+        </div>
       </div>
     </Modal>
   );
