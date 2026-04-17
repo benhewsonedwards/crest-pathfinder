@@ -240,19 +240,30 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
           </g>
         )}
 
-        {/* Labels — static, never re-render */}
+        {/* Clip path — bars are clipped to chart area, can never overlap labels */}
+        <defs>
+          <clipPath id="gantt-chart-clip">
+            <rect x={LABEL_W} y={0} width={CHART_W + 20} height={SVG_H} />
+          </clipPath>
+        </defs>
+
+        {/* Bars — wrapped in clip group so they can't paint over the label column */}
+        <g clipPath="url(#gantt-chart-clip)">
+          {propTasks.map((t, i) => (
+            <DraggableBar key={t.id||i} task={t} idx={i} L={L}
+              canEdit={canEdit} onCommit={onUpdateTask} containerRef={containerRef} />
+          ))}
+        </g>
+
+        {/* Label column — painted after bars, always on top */}
+        <rect x={0} y={0} width={LABEL_W} height={SVG_H} fill="#F8F9FC" style={{ pointerEvents:"none" }}/>
+        <line x1={LABEL_W} y1={0} x2={LABEL_W} y2={SVG_H} stroke="#E4E7EF" strokeWidth={1} style={{ pointerEvents:"none" }}/>
         {propTasks.map((t, i) => (
-          <text key={t.id||i} x={LABEL_W-8} y={i*ROW_H+24+4+(ROW_H-8)/2+4}
+          <text key={t.id||i} x={LABEL_W-10} y={i*ROW_H+24+4+(ROW_H-8)/2+4}
             fill={t.done ? "#9CA3AF" : "#374151"} fontSize={10}
             textAnchor="end" dominantBaseline="middle">
-            {t.title.length > 24 ? t.title.slice(0,22)+"…" : t.title}
+            {t.title.length > 22 ? t.title.slice(0,20)+"…" : t.title}
           </text>
-        ))}
-
-        {/* Bars — each is its own component, only the dragged one re-renders */}
-        {propTasks.map((t, i) => (
-          <DraggableBar key={t.id||i} task={t} idx={i} L={L}
-            canEdit={canEdit} onCommit={onUpdateTask} containerRef={containerRef} />
         ))}
 
         {stageGroups.map(g => (
