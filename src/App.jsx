@@ -159,15 +159,43 @@ function AppShell() {
         ) : page === "settings" ? (
           <div style={{ padding: "24px 28px 48px" }}>
             <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 8 }}>Settings</h1>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Platform configuration and integrations.</p>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Platform configuration and integration status.</p>
+
+            {/* Security */}
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 16 }}>
+              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 4 }}>🔒 Firestore security rules</h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>Rules are written and committed. Deploy them once to lock down the database.</p>
+              <div style={{ background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-second)" }}>
+                firebase deploy --only firestore:rules,firestore:indexes
+              </div>
+            </div>
+
+            {/* Data seed */}
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 16 }}>
+              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 4 }}>🌱 EMEA data seed</h3>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>11 EMEA engagements ready to seed from Glean data. Requires Firebase Admin service account key.</p>
+              <div style={{ background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-second)" }}>
+                1. Firebase console → Project Settings → Service accounts → Generate new private key{"\n"}
+                2. Save as scripts/serviceAccount.json{"\n"}
+                3. node scripts/seed-emea.mjs
+              </div>
+            </div>
+
+            {/* Roadmap */}
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px" }}>
-              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Coming soon</h3>
-              <ul style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 2, listStyle: "none" }}>
-                <li>🔗 Salesforce integration — auto-sync opportunities and CS Requests</li>
-                <li>🎫 Jira integration — auto-sync CSE tickets and status updates</li>
-                <li>🔒 Firestore security rules — role-based data access</li>
-                <li>📧 Email notifications — overdue tasks and stage advances</li>
-                <li>🔗 Shareable customer-facing view links</li>
+              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 8 }}>🗺 Roadmap</h3>
+              <ul style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 2.2, listStyle: "none" }}>
+                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Customer lifecycle management (7 stages)</li>
+                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Data capture forms (all stages)</li>
+                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Integration portfolio per customer</li>
+                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Integration spec export (.docx)</li>
+                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Customer dashboard with shareable view</li>
+                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Role-based access (CSE / CSM / COM / AE / TA)</li>
+                <li><span style={{ color: "var(--amber)", marginRight: 8 }}>◐</span>Firestore security rules (written, needs deploy)</li>
+                <li><span style={{ color: "var(--amber)", marginRight: 8 }}>◐</span>EMEA data seed (needs service account key)</li>
+                <li><span style={{ color: "var(--text-muted)", marginRight: 8 }}>○</span>Salesforce sync — auto-pull CS Requests</li>
+                <li><span style={{ color: "var(--text-muted)", marginRight: 8 }}>○</span>Jira sync — live ticket status updates</li>
+                <li><span style={{ color: "var(--text-muted)", marginRight: 8 }}>○</span>Email notifications — overdue tasks & stage advances</li>
               </ul>
             </div>
           </div>
