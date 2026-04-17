@@ -14,198 +14,238 @@ import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 // ─── Interactive Gantt chart ──────────────────────────────────────────────────
 function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   const svgRef = React.useRef(null);
-  const stateRef = React.useRef({});   // holds everything the drag handlers need — never stale
-  const [renderKey, setRenderKey] = React.useState(0); // force re-render during drag
+  const S = React.useRef({});          // stable state — never causes stale closures
+  const [tick, setTick] = React.useState(0); // force re-render
 
-  // ── Build flat task list ───────────────────────────────────────────────────
-  const allTasks = [];
-  STAGE_KEYS.forEach(sk => (stageTasks[sk] || []).forEach(t => allTasks.push({ ...t, stageKey: sk })));
+  const rerender = () => setTick(n => n + 1);
 
-  if (allTasks.length === 0) return (
+  // ── Build flat task list from props ────────────────────────────────────────
+  const propTasks = [];
+  STAGE_KEYS.forEach(sk => (stageTasks[sk] || []).forEach(t => propTasks.push({ ...t, stageKey: sk })));
+
+  // Always keep the latest prop tasks and callbacks in S so handlers see them
+  S.current.propTasks     = propTasks;
+  S.current.onUpdateTask  = onUpdateTask;
+  S.current.canEdit       = canEdit;
+
+  // During drag or pending confirmation, show localTasks instead of propTasks
+  const displayTasks = S.current.localTasks || propTasks;
+
+  if (displayTasks.length === 0) return (
     <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "20px 0" }}>
       No tasks defined yet. Add tasks to stages to see the Gantt.
     </p>
   );
 
-  // Keep stateRef current so drag handlers always read the latest values
-  stateRef.current.allTasks = allTasks;
-  stateRef.current.onUpdateTask = onUpdateTask;
-  stateRef.current.canEdit = canEdit;
+  // ── Layout — only recompute when NOT dragging ──────────────────────────────
+  // This is the core fix: freezing layout during drag prevents scale-drift jumps.
+  if (!S.current.dragging) {
+    const dates = propTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
+    if (!dates.length) return null;
+    const mn = new Date(dates[0]);
+    const mx = new Date(dates[dates.length - 1]);
+    mn.setDate(mn.getDate() - 2);
+    mx.setDate(mx.getDate() + 7);
+    const totalDays = diffDays(mn.toISOString().slice(0,10), mx.toISOString().slice(0,10));
+    const CHART_W = Math.max(totalDays * 14, 600);
+    const LABEL_W = 170;
+    S.current.layout = {
+      minDate: mn,
+      minIso:  mn.toISOString().slice(0,10),
+      maxDate: mx,
+      totalDays,
+      LABEL_W,
+      CHART_W,
+      SVG_W: LABEL_W + CHART_W + 20,
+      PX_PER_DAY: CHART_W / totalDays,
+      ROW_H: 30,
+    };
+  }
 
-  // displayTasks: use localTasks during drag, allTasks otherwise
-  const displayTasks = stateRef.current.localTasks || allTasks;
+  const L = S.current.layout;
+  if (!L) return null;
 
-  // ── Layout maths ──────────────────────────────────────────────────────────
-  const allDates = displayTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
-  if (allDates.length === 0) return null;
+  const { minDate, minIso, maxDate, totalDays, LABEL_W, CHART_W, SVG_W, PX_PER_DAY, ROW_H } = L;
+  const SVG_H = displayTasks.length * ROW_H + 44;
+  const HANDLE_W = 7;
 
-  const minDate = new Date(allDates[0]);
-  const maxDate = new Date(allDates[allDates.length - 1]);
-  minDate.setDate(minDate.getDate() - 2);
-  maxDate.setDate(maxDate.getDate() + 5);
-  const totalDays = diffDays(minDate.toISOString().slice(0,10), maxDate.toISOString().slice(0,10));
-
-  const ROW_H = 30, LABEL_W = 170, CHART_W = Math.max(totalDays * 14, 600);
-  const SVG_W = LABEL_W + CHART_W + 20;
-  const SVG_H = Math.max(allTasks.length, displayTasks.length) * ROW_H + 44;
-  const PX_PER_DAY = CHART_W / totalDays;
-  const minIso = minDate.toISOString().slice(0,10);
-
-  // Keep layout params in ref for handlers
-  stateRef.current.PX_PER_DAY = PX_PER_DAY;
-  stateRef.current.SVG_W = SVG_W;
-  stateRef.current.minDate = minDate;
-  stateRef.current.totalDays = totalDays;
-  stateRef.current.LABEL_W = LABEL_W;
-  stateRef.current.CHART_W = CHART_W;
-
+  // ── Coordinate helpers ────────────────────────────────────────────────────
   function xPos(iso) {
     if (!iso) return LABEL_W;
     return LABEL_W + (diffDays(minIso, iso) / totalDays) * CHART_W;
   }
 
-  function shiftIso(iso, calendarDays) {
-    if (!iso) return iso;
-    const d = new Date(iso);
-    d.setDate(d.getDate() + calendarDays);
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0,10);
+  function xToWorkingIso(svgX) {
+    // Convert SVG x to a working-day ISO date
+    const rawDays = Math.round((svgX - LABEL_W) / PX_PER_DAY);
+    const d = new Date(minDate);
+    d.setDate(d.getDate() + rawDays);
+    // Snap: if weekend, go to nearest working day
+    if (d.getDay() === 6) d.setDate(d.getDate() - 1);   // Sat → Fri
+    if (d.getDay() === 0) d.setDate(d.getDate() + 1);   // Sun → Mon
+    return d.toISOString().slice(0, 10);
   }
 
   function getSvgX(e) {
     if (!svgRef.current) return 0;
     const rect = svgRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    return (clientX - rect.left) * (stateRef.current.SVG_W / rect.width);
+    // Use frozen SVG_W from layout, not current DOM width, for consistent coords
+    return (clientX - rect.left) * (SVG_W / rect.width);
   }
 
-  // ── Drag handlers (defined once, read everything from stateRef) ────────────
-  // Store them in refs so addEventListener/removeEventListener always uses the same function
-  if (!stateRef.current.onPointerMove) {
-    stateRef.current.onPointerMove = function(e) {
-      const drag = stateRef.current.drag;
+  // ── Drag handlers — created once, always read from S.current ──────────────
+  if (!S.current.handlersAttached) {
+    S.current.handlersAttached = true;
+
+    S.current.onMove = function(e) {
+      const drag = S.current.drag;
       if (!drag) return;
-      if (e.preventDefault) e.preventDefault();
+      if (e.cancelable) e.preventDefault();
 
-      const { taskIdx, mode, startX, origStart, origEnd } = drag;
-      const dx = getSvgX(e) - startX;
-      const daysDelta = Math.round(dx / stateRef.current.PX_PER_DAY);
+      const currentX = getSvgX(e);
+      const { mode, anchorX, anchorIso, origStart, origEnd, origDurDays } = drag;
 
-      // Clone localTasks and update the dragged task
-      const next = (stateRef.current.localTasks || stateRef.current.allTasks).map(x => ({ ...x }));
-      const t = next[taskIdx];
+      // Compute date delta from the frozen anchor point
+      const anchorDate  = new Date(anchorIso);
+      const currentDate = new Date(xToWorkingIso(currentX));
+      const deltaDays   = Math.round((currentDate - anchorDate) / 86400000);
 
-      if (mode === "move") {
-        t.startDate = shiftIso(origStart, daysDelta);
-        t.endDate   = shiftIso(origEnd,   daysDelta);
-      } else if (mode === "left") {
-        const ns = shiftIso(origStart, daysDelta);
-        if (ns < origEnd) t.startDate = ns;
-      } else {
-        const ne = shiftIso(origEnd, daysDelta);
-        if (ne > origStart) t.endDate = ne;
+      // Apply delta to original dates
+      function shiftDate(iso, d) {
+        const nd = new Date(iso);
+        nd.setDate(nd.getDate() + d);
+        if (nd.getDay() === 6) nd.setDate(nd.getDate() - 1);
+        if (nd.getDay() === 0) nd.setDate(nd.getDate() + 1);
+        return nd.toISOString().slice(0, 10);
       }
 
-      stateRef.current.localTasks = next;
-      stateRef.current.tooltip = {
-        x: null, // computed in render
-        taskIdx,
-        start: t.startDate,
-        end: t.endDate,
-      };
-      setRenderKey(k => k + 1); // trigger re-render with new localTasks
+      const next = S.current.localTasks.map(x => ({ ...x }));
+      const t = next[drag.taskIdx];
+
+      if (mode === "move") {
+        t.startDate = shiftDate(origStart, deltaDays);
+        t.endDate   = shiftDate(origEnd,   deltaDays);
+      } else if (mode === "left") {
+        const ns = shiftDate(origStart, deltaDays);
+        if (ns < t.endDate) t.startDate = ns;
+      } else { // right
+        const ne = shiftDate(origEnd, deltaDays);
+        if (ne > t.startDate) t.endDate = ne;
+      }
+
+      S.current.localTasks = next;
+      S.current.tooltip = { taskIdx: drag.taskIdx, start: t.startDate, end: t.endDate };
+      rerender();
     };
 
-    stateRef.current.onPointerUp = function() {
-      window.removeEventListener("mousemove", stateRef.current.onPointerMove);
-      window.removeEventListener("mouseup",   stateRef.current.onPointerUp);
-      window.removeEventListener("touchmove", stateRef.current.onPointerMove);
-      window.removeEventListener("touchend",  stateRef.current.onPointerUp);
+    S.current.onUp = function() {
+      window.removeEventListener("mousemove", S.current.onMove);
+      window.removeEventListener("mouseup",   S.current.onUp);
+      window.removeEventListener("touchmove", S.current.onMove);
+      window.removeEventListener("touchend",  S.current.onUp);
 
-      const drag = stateRef.current.drag;
-      const local = stateRef.current.localTasks;
-      stateRef.current.tooltip = null;
+      S.current.dragging = false;
+      S.current.tooltip  = null;
 
-      if (!drag || !local) {
-        stateRef.current.drag = null;
-        stateRef.current.localTasks = null;
-        setRenderKey(k => k + 1);
+      const drag  = S.current.drag;
+      const local = S.current.localTasks;
+      S.current.drag = null;
+
+      if (!drag || !local) { S.current.localTasks = null; rerender(); return; }
+
+      const updated  = local[drag.taskIdx];
+      const original = S.current.propTasks[drag.taskIdx];
+
+      if (!original ||
+          (updated.startDate === original.startDate && updated.endDate === original.endDate)) {
+        // Nothing changed — drop localTasks immediately
+        S.current.localTasks = null;
+        rerender();
         return;
       }
 
-      const { taskIdx } = drag;
-      const updated  = local[taskIdx];
-      const original = stateRef.current.allTasks[taskIdx];
+      // Record what we expect Firestore to confirm for this task
+      // localTasks stays alive until the prop update arrives
+      S.current.pending = {
+        stageKey:  original.stageKey,
+        id:        original.id,
+        startDate: updated.startDate,
+        endDate:   updated.endDate,
+      };
 
-      stateRef.current.drag = null;
-      // Keep localTasks alive until Firestore confirms — cleared by useEffect below
+      S.current.onUpdateTask(original.stageKey, original.id, {
+        startDate: updated.startDate,
+        endDate:   updated.endDate,
+      });
 
-      if (updated.startDate !== original.startDate || updated.endDate !== original.endDate) {
-        stateRef.current.pendingUpdate = { stageKey: original.stageKey, id: original.id, startDate: updated.startDate, endDate: updated.endDate };
-        stateRef.current.onUpdateTask(original.stageKey, original.id, {
-          startDate: updated.startDate,
-          endDate:   updated.endDate,
-        });
-      } else {
-        stateRef.current.localTasks = null;
-      }
-      setRenderKey(k => k + 1);
+      rerender();
     };
   }
 
-  // ── Clear localTasks once Firestore confirms the update ────────────────────
-  // When the incoming stageTasks prop reflects our pending update, stop showing localTasks
+  // ── Release localTasks once Firestore confirms ─────────────────────────────
   React.useEffect(() => {
-    const pending = stateRef.current.pendingUpdate;
-    if (!pending) return;
-    const task = (stageTasks[pending.stageKey] || []).find(t => t.id === pending.id);
-    if (task && task.startDate === pending.startDate && task.endDate === pending.endDate) {
-      stateRef.current.localTasks = null;
-      stateRef.current.pendingUpdate = null;
-      setRenderKey(k => k + 1);
+    const p = S.current.pending;
+    if (!p || S.current.dragging) return;
+    const confirmed = (stageTasks[p.stageKey] || []).find(
+      t => t.id === p.id && t.startDate === p.startDate && t.endDate === p.endDate
+    );
+    if (confirmed) {
+      S.current.localTasks = null;
+      S.current.pending    = null;
+      rerender();
     }
   });
 
   function onPointerDown(e, taskIdx, mode) {
-    if (!stateRef.current.canEdit) return;
-    const t = stateRef.current.allTasks[taskIdx];
+    if (!S.current.canEdit) return;
+    const t = S.current.propTasks[taskIdx];
     if (!t || t.done || t.locked) return;
     e.preventDefault();
-    stateRef.current.drag = {
-      taskIdx, mode,
-      startX: getSvgX(e),
-      origStart: t.startDate,
-      origEnd:   t.endDate,
+    e.stopPropagation();
+
+    // Snapshot starting position — all deltas computed from this, never accumulated
+    const svgX = getSvgX(e);
+    S.current.drag = {
+      taskIdx,
+      mode,
+      anchorX:    svgX,
+      anchorIso:  xToWorkingIso(svgX),  // freeze the date at the click point
+      origStart:  t.startDate,
+      origEnd:    t.endDate,
     };
-    stateRef.current.localTasks = stateRef.current.allTasks.map(x => ({ ...x }));
-    window.addEventListener("mousemove", stateRef.current.onPointerMove);
-    window.addEventListener("mouseup",   stateRef.current.onPointerUp);
-    window.addEventListener("touchmove", stateRef.current.onPointerMove, { passive: false });
-    window.addEventListener("touchend",  stateRef.current.onPointerUp);
+    S.current.dragging    = true;
+    S.current.localTasks  = S.current.propTasks.map(x => ({ ...x }));
+
+    window.addEventListener("mousemove", S.current.onMove);
+    window.addEventListener("mouseup",   S.current.onUp);
+    window.addEventListener("touchmove", S.current.onMove, { passive: false });
+    window.addEventListener("touchend",  S.current.onUp);
+    rerender();
   }
 
-  // ── Months ─────────────────────────────────────────────────────────────────
+  // ── Month labels ──────────────────────────────────────────────────────────
   const months = [];
   const cur = new Date(minDate);
   while (cur <= maxDate) {
     months.push({
       label: cur.toLocaleDateString("en-GB", { month: "short", year: "2-digit" }),
-      x: xPos(cur.toISOString().slice(0,10)),
+      x:     xPos(cur.toISOString().slice(0,10)),
     });
-    cur.setMonth(cur.getMonth() + 1); cur.setDate(1);
+    cur.setMonth(cur.getMonth() + 1);
+    cur.setDate(1);
   }
 
-  const todayX = xPos(todayIso());
+  const todayX   = xPos(todayIso());
   const showToday = todayX > LABEL_W && todayX < LABEL_W + CHART_W;
-  const HANDLE_W = 6;
-  const drag = stateRef.current.drag;
-  const tooltip = stateRef.current.tooltip;
+  const drag      = S.current.drag;
+  const tooltip   = S.current.tooltip;
 
   return (
     <div style={{ overflowX: "auto", userSelect: "none" }}>
       <svg ref={svgRef} width={SVG_W} height={SVG_H}
-        style={{ display: "block", fontFamily: "Inter, sans-serif", touchAction: "none" }}
-      >
+        style={{ display: "block", fontFamily: "Inter, sans-serif", touchAction: "none" }}>
+
         {/* Row backgrounds */}
         {displayTasks.map((_, i) => (
           <rect key={i} x={0} y={i*ROW_H+24} width={SVG_W} height={ROW_H}
@@ -220,71 +260,82 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
           </g>
         ))}
 
-        {/* Today line */}
+        {/* Today marker */}
         {showToday && (
           <g>
-            <line x1={todayX} y1={0} x2={todayX} y2={SVG_H} stroke="#D97706" strokeWidth={1.5} strokeDasharray="4 3"/>
+            <line x1={todayX} y1={0} x2={todayX} y2={SVG_H}
+              stroke="#D97706" strokeWidth={1.5} strokeDasharray="4 3"/>
             <text x={todayX+3} y={14} fill="#D97706" fontSize={9} fontWeight="600">Today</text>
           </g>
         )}
 
         {/* Task bars */}
         {displayTasks.map((t, i) => {
-          const colour = stageColour(t.stageKey);
-          const x1 = xPos(t.startDate || todayIso());
-          const x2 = xPos(t.endDate   || workingDayAdd(t.startDate || todayIso(), 1));
-          const barW = Math.max(x2 - x1, 8);
-          const y = i*ROW_H+24+4, barH = ROW_H-8;
-          const isDraggable = canEdit && !t.done && !t.locked;
-          const isDragging  = drag?.taskIdx === i;
+          const colour      = stageColour(t.stageKey);
+          const x1          = xPos(t.startDate || todayIso());
+          const x2          = xPos(t.endDate   || workingDayAdd(t.startDate || todayIso(), 1));
+          const barW        = Math.max(x2 - x1, 8);
+          const y           = i*ROW_H + 24 + 4;
+          const barH        = ROW_H - 8;
+          const isMovable   = canEdit && !t.done && !t.locked;
+          const isActive    = drag?.taskIdx === i;
 
           return (
             <g key={t.id || i}>
+              {/* Label */}
               <text x={LABEL_W-8} y={y+barH/2+4}
-                fill={t.done?"#9CA3AF":"#4B5563"} fontSize={10}
+                fill={t.done ? "#9CA3AF" : "#374151"} fontSize={10}
                 textAnchor="end" dominantBaseline="middle">
                 {t.title.length > 24 ? t.title.slice(0,22)+"…" : t.title}
               </text>
 
-              {isDragging && (
-                <rect x={x1+2} y={y+2} width={barW} height={barH} rx={3} fill="rgba(0,0,0,0.08)" />
+              {/* Drop shadow while dragging */}
+              {isActive && (
+                <rect x={x1+2} y={y+2} width={barW} height={barH} rx={3}
+                  fill="rgba(0,0,0,0.1)" style={{ pointerEvents: "none" }}/>
               )}
 
+              {/* Bar */}
               <rect x={x1} y={y} width={barW} height={barH} rx={3}
-                fill={t.done ? colour+"30" : t.locked ? colour+"45" : isDragging ? colour+"99" : colour+"60"}
-                stroke={t.locked ? colour : "none"} strokeWidth={t.locked ? 1.5 : 0}
-                strokeDasharray={t.locked ? "4 2" : "none"}
-                style={{ cursor: isDraggable ? "grab" : "default" }}
-                onMouseDown={e => onPointerDown(e, i, "move")}
-                onTouchStart={e => onPointerDown(e, i, "move")}
+                fill={
+                  t.done   ? colour+"30" :
+                  t.locked ? colour+"45" :
+                  isActive ? colour+"BB" : colour+"70"
+                }
+                stroke={t.locked ? colour : "none"}
+                strokeWidth={t.locked ? 1.5 : 0}
+                strokeDasharray={t.locked ? "5 2" : "none"}
+                style={{ cursor: isMovable ? "grab" : "default" }}
+                onMouseDown={ev => onPointerDown(ev, i, "move")}
+                onTouchStart={ev => onPointerDown(ev, i, "move")}
               />
+              {/* Colour accent left edge */}
               <rect x={x1} y={y} width={3} height={barH} rx={1} fill={colour}
-                style={{ pointerEvents: "none" }} />
+                style={{ pointerEvents: "none" }}/>
 
               {t.done && (
                 <text x={x1+barW/2} y={y+barH/2+1} textAnchor="middle"
                   dominantBaseline="middle" fill={colour} fontSize={9} fontWeight="700"
                   style={{ pointerEvents: "none" }}>✓</text>
               )}
-              {t.locked && !t.done && (
-                <text x={x1+barW-8} y={y+barH/2+1} textAnchor="middle"
+              {t.locked && !t.done && barW > 16 && (
+                <text x={x1+barW-9} y={y+barH/2+1} textAnchor="middle"
                   dominantBaseline="middle" fontSize={9}
                   style={{ pointerEvents: "none" }}>🔒</text>
               )}
 
-              {isDraggable && barW > 20 && (
+              {/* Resize handles */}
+              {isMovable && barW > 20 && (
                 <>
                   <rect x={x1} y={y} width={HANDLE_W} height={barH} rx={2}
-                    fill={colour} opacity={0.8}
-                    style={{ cursor: "ew-resize" }}
-                    onMouseDown={e => { e.stopPropagation(); onPointerDown(e, i, "left"); }}
-                    onTouchStart={e => { e.stopPropagation(); onPointerDown(e, i, "left"); }}
+                    fill={colour} opacity={0.85} style={{ cursor: "ew-resize" }}
+                    onMouseDown={ev => { ev.stopPropagation(); onPointerDown(ev, i, "left"); }}
+                    onTouchStart={ev => { ev.stopPropagation(); onPointerDown(ev, i, "left"); }}
                   />
                   <rect x={x1+barW-HANDLE_W} y={y} width={HANDLE_W} height={barH} rx={2}
-                    fill={colour} opacity={0.8}
-                    style={{ cursor: "ew-resize" }}
-                    onMouseDown={e => { e.stopPropagation(); onPointerDown(e, i, "right"); }}
-                    onTouchStart={e => { e.stopPropagation(); onPointerDown(e, i, "right"); }}
+                    fill={colour} opacity={0.85} style={{ cursor: "ew-resize" }}
+                    onMouseDown={ev => { ev.stopPropagation(); onPointerDown(ev, i, "right"); }}
+                    onTouchStart={ev => { ev.stopPropagation(); onPointerDown(ev, i, "right"); }}
                   />
                 </>
               )}
@@ -295,32 +346,34 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
         {/* Stage colour sidebar */}
         {(() => {
           const groups = []; let last = null, si = 0;
-          displayTasks.forEach((t, idx) => {
+          displayTasks.forEach((t, i) => {
             if (t.stageKey !== last) {
-              if (last) groups.push({ stageKey: last, si, ei: idx-1 });
-              last = t.stageKey; si = idx;
+              if (last) groups.push({ key: last, si, ei: i-1 });
+              last = t.stageKey; si = i;
             }
           });
-          if (last) groups.push({ stageKey: last, si, ei: displayTasks.length-1 });
+          if (last) groups.push({ key: last, si, ei: displayTasks.length-1 });
           return groups.map(g => (
-            <rect key={g.stageKey} x={0} y={g.si*ROW_H+24} width={3}
-              height={(g.ei-g.si+1)*ROW_H} fill={stageColour(g.stageKey)} rx={1}
-              style={{ pointerEvents: "none" }} />
+            <rect key={g.key} x={0} y={g.si*ROW_H+24} width={3}
+              height={(g.ei-g.si+1)*ROW_H} fill={stageColour(g.key)} rx={1}
+              style={{ pointerEvents: "none" }}/>
           ));
         })()}
 
-        {/* Drag tooltip */}
+        {/* Tooltip */}
         {tooltip && (() => {
           const t = displayTasks[tooltip.taskIdx];
           if (!t) return null;
-          const x1 = xPos(t.startDate || todayIso());
-          const x2 = xPos(t.endDate   || todayIso());
-          const cx = Math.min(Math.max((x1+x2)/2, LABEL_W+66), SVG_W-66);
-          const ty = tooltip.taskIdx * ROW_H + 24 - 8;
+          const cx = Math.min(
+            Math.max((xPos(t.startDate)+xPos(t.endDate))/2, LABEL_W+70),
+            SVG_W-70
+          );
+          const ty = tooltip.taskIdx * ROW_H + 24 - 6;
           return (
             <g style={{ pointerEvents: "none" }}>
-              <rect x={cx-64} y={ty-18} width={128} height={20} rx={5} fill="#1F2533" opacity={0.92}/>
-              <text x={cx} y={ty-5} textAnchor="middle" dominantBaseline="middle"
+              <rect x={cx-66} y={ty-20} width={132} height={20} rx={5}
+                fill="#111827" opacity={0.88}/>
+              <text x={cx} y={ty-7} textAnchor="middle" dominantBaseline="middle"
                 fill="white" fontSize={10} fontWeight={600}>
                 {fmtDate(tooltip.start)} → {fmtDate(tooltip.end)}
               </text>
@@ -328,9 +381,10 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
           );
         })()}
       </svg>
+
       {canEdit && (
         <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, paddingLeft: 4 }}>
-          Drag bars to move · drag edges to resize · changes ripple to dependent tasks
+          Drag bars to move · drag edges to resize · 🔒 to pin a date
         </p>
       )}
     </div>
