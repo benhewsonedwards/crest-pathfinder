@@ -7,6 +7,7 @@ import {
   buildDefaultTasks, fmtDate, fmtDateTime, stageColour, todayIso, workingDayAdd, diffDays
 } from "../lib/constants";
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
+import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 
 // ─── Gantt chart ──────────────────────────────────────────────────────────────
 function GanttChart({ stageTasks }) {
@@ -448,14 +449,15 @@ export default function EngagementDetail({ engagement, onBack, users }) {
         </div>
       )}
 
-      {/* ── TASKS ── */}
       {activeTab === "tasks" && (
         <div>
-          {/* Stage tabs */}
+          {/* Stage selector */}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
             {STAGES.map(s => {
               const tasks = engagement.stageTasks?.[s.key] || [];
               const done = tasks.filter(t=>t.done).length;
+              const capComp = captureCompleteness(s.key, (engagement.stageCapture||{})[s.key] || {});
+              const hasCritGap = capComp && capComp.criticalPct < 100;
               const isActive = activeStage === s.key;
               return (
                 <button key={s.key} onClick={() => setActiveStage(s.key)} style={{
@@ -467,53 +469,88 @@ export default function EngagementDetail({ engagement, onBack, users }) {
                 }}>
                   <span>{s.icon}</span> {s.shortLabel}
                   {tasks.length > 0 && <span style={{ fontSize: 10, background: isActive ? s.colour+"20" : "var(--surface2)", color: isActive ? s.colour : "var(--text-muted)", padding: "0 4px", borderRadius: 4 }}>{done}/{tasks.length}</span>}
+                  {hasCritGap && <span style={{ color: "var(--amber)", fontSize: 10 }}>⚠</span>}
                 </button>
               );
             })}
           </div>
 
-          <Card>
-            {(() => {
-              const stage = STAGES.find(s => s.key === activeStage);
-              const tasks = engagement.stageTasks?.[activeStage] || [];
+          {/* Sub-tabs: Tasks / Capture */}
+          <div style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: 16, gap: 0 }}>
+            {[["tasks", "Tasks"], ["capture", "Data Capture"]].map(([id, label]) => {
+              const capComp = id === "capture" ? captureCompleteness(activeStage, (engagement.stageCapture||{})[activeStage]||{}) : null;
               return (
-                <div>
-                  <CardHeader>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ fontSize: 16 }}>{stage?.icon}</span>
-                      <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: stage?.colour }}>{stage?.label}</span>
-                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{stage?.description}</span>
-                    </div>
-                    {canEdit && (
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {tasks.length === 0 && <Btn size="sm" variant="ghost" onClick={() => loadDefaults(activeStage)}>Load defaults</Btn>}
-                        <Btn size="sm" variant="ghost" onClick={() => addTask(activeStage)}>+ Add task</Btn>
-                      </div>
-                    )}
-                  </CardHeader>
-                  {tasks.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "24px 0" }}>
-                      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 10 }}>No tasks yet for this stage</p>
-                      {canEdit && <Btn size="sm" onClick={() => loadDefaults(activeStage)}>Load default tasks</Btn>}
-                    </div>
-                  ) : (
-                    <>
-                      <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 80px 28px", gap: 8, padding: "7px 16px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-                        {["✓", "Task", "Owner", "Start", "End", "Status", ""].map(h => <Label key={h}>{h}</Label>)}
-                      </div>
-                      {tasks.map((task, i) => (
-                        <TaskRow key={task.id || i} task={task}
-                          onUpdate={updates => canEdit && updateTask(activeStage, i, updates)}
-                          onDelete={() => canEdit && deleteTask(activeStage, i)}
-                          stageColour={stage?.colour} users={users}
-                        />
-                      ))}
-                    </>
+                <button key={id} onClick={() => setStageSubTab(id)} style={{
+                  padding: "7px 14px", fontSize: 13, cursor: "pointer", background: "none",
+                  border: "none", borderBottom: `2px solid ${stageSubTab===id?"var(--purple)":"transparent"}`,
+                  color: stageSubTab===id?"var(--purple)":"var(--text-second)", fontWeight: stageSubTab===id?600:400,
+                  fontFamily: "inherit", marginBottom: -1, display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  {label}
+                  {capComp && (
+                    <span style={{ fontSize: 9, background: capComp.criticalPct===100?"var(--green-light)":"var(--amber-light)", color: capComp.criticalPct===100?"var(--green)":"var(--amber)", padding: "1px 5px", borderRadius: 999, fontWeight: 700 }}>
+                      {capComp.criticalDone}/{capComp.critical}
+                    </span>
                   )}
-                </div>
+                </button>
               );
-            })()}
-          </Card>
+            })}
+          </div>
+
+          {stageSubTab === "tasks" && (
+            <Card>
+              {(() => {
+                const stage = STAGES.find(s => s.key === activeStage);
+                const tasks = engagement.stageTasks?.[activeStage] || [];
+                return (
+                  <div>
+                    <CardHeader>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>{stage?.icon}</span>
+                        <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: stage?.colour }}>{stage?.label}</span>
+                        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{stage?.description}</span>
+                      </div>
+                      {canEdit && (
+                        <div style={{ display: "flex", gap: 6 }}>
+                          {tasks.length === 0 && <Btn size="sm" variant="ghost" onClick={() => loadDefaults(activeStage)}>Load defaults</Btn>}
+                          <Btn size="sm" variant="ghost" onClick={() => addTask(activeStage)}>+ Add task</Btn>
+                        </div>
+                      )}
+                    </CardHeader>
+                    {tasks.length === 0 ? (
+                      <div style={{ textAlign: "center", padding: "24px 0" }}>
+                        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 10 }}>No tasks yet for this stage</p>
+                        {canEdit && <Btn size="sm" onClick={() => loadDefaults(activeStage)}>Load default tasks</Btn>}
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 80px 28px", gap: 8, padding: "7px 16px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+                          {["✓", "Task", "Owner", "Start", "End", "Status", ""].map(h => <Label key={h}>{h}</Label>)}
+                        </div>
+                        {tasks.map((task, i) => (
+                          <TaskRow key={task.id || i} task={task}
+                            onUpdate={updates => canEdit && updateTask(activeStage, i, updates)}
+                            onDelete={() => canEdit && deleteTask(activeStage, i)}
+                            stageColour={stage?.colour} users={users}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+            </Card>
+          )}
+
+          {stageSubTab === "capture" && (
+            <CapturePanel
+              engagementId={engagement.id}
+              stageKey={activeStage}
+              captureData={(engagement.stageCapture||{})[activeStage] || {}}
+              allStageCapture={engagement.stageCapture || {}}
+              canEdit={canEdit}
+            />
+          )}
         </div>
       )}
 
