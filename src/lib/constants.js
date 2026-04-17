@@ -155,13 +155,15 @@ export function buildDefaultTasks(stageKey, startDate = todayIso()) {
     const task = {
       id: stageKey + "-" + i + "-" + Date.now(),
       title: t.title,
-      ownerRole: t.owner,
+      owner: t.owner,          // used by shareable view to identify customer tasks
+      ownerRole: t.owner,      // kept for backwards compat with existing UI
       ownerUid: null,
       startDate: cursor,
       endDate: workingDayAdd(cursor, t.durationDays),
       required: t.required,
       done: false,
       notes: "",
+      ...(t.customerNote ? { customerNote: t.customerNote } : {}),
     };
     cursor = workingDayAdd(task.endDate, 1);
     return task;

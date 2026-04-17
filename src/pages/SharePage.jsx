@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { STAGES, STAGE_KEYS, RAG_STATUSES, stageColour, fmtDate } from "../lib/constants";
+import { STAGES, STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES, stageColour, fmtDate } from "../lib/constants";
 import { integrationStatus, TICKET_TYPES, ticketType } from "../lib/integrationConstants";
 import { Spinner } from "../components/UI";
 
@@ -281,9 +281,21 @@ export default function SharePage({ customerId }) {
         {latestEngagement && (() => {
           const customerTasks = [];
           STAGE_KEYS.forEach(sk => {
-            (latestEngagement.stageTasks?.[sk] || [])
-              .filter(t => t.owner === "customer")
-              .forEach(t => customerTasks.push({ ...t, stageKey: sk }));
+            const stored = latestEngagement.stageTasks?.[sk];
+            if (stored && stored.length > 0) {
+              stored
+                .filter(t => t.owner === "customer" || t.ownerRole === "customer")
+                .forEach(t => customerTasks.push({ ...t, stageKey: sk }));
+            } else {
+              (TASK_TEMPLATES[sk] || [])
+                .filter(t => t.owner === "customer")
+                .forEach(t => customerTasks.push({
+                  title: t.title, stageKey: sk,
+                  owner: "customer", ownerRole: "customer",
+                  customerNote: t.customerNote || null,
+                  done: false, startDate: null, endDate: null,
+                }));
+            }
           });
           if (!customerTasks.length) return null;
           const pending = customerTasks.filter(t => !t.done);

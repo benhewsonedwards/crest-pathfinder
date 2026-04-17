@@ -5,7 +5,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
-import { STAGES, STAGE_KEYS, RAG_STATUSES, fmtDate, timeAgo, stageColour } from "../lib/constants";
+import { STAGES, STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES, fmtDate, timeAgo, stageColour } from "../lib/constants";
 import { integrationStatus, ticketType, TICKET_TYPES } from "../lib/integrationConstants";
 import {
   Card, CardHeader, Label, Pill, Avatar, Btn,
@@ -208,17 +208,31 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
 
       {/* ── Your actions ── */}
       {latestEngagement && (() => {
-        // Collect all customer-owned tasks across all stages
+        // Collect customer-owned tasks. For stages not yet initialised,
+        // fall back to TASK_TEMPLATES so the customer sees the full picture.
         const customerTasks = [];
         STAGE_KEYS.forEach(sk => {
-          (latestEngagement.stageTasks?.[sk] || [])
-            .filter(t => t.owner === "customer")
-            .forEach(t => customerTasks.push({ ...t, stageKey: sk }));
+          const stored = latestEngagement.stageTasks?.[sk];
+          if (stored && stored.length > 0) {
+            // Real tasks — use stored data (has done status, dates, etc.)
+            stored
+              .filter(t => t.owner === "customer" || t.ownerRole === "customer")
+              .forEach(t => customerTasks.push({ ...t, stageKey: sk }));
+          } else {
+            // Stage not yet initialised — pull from templates so customer can see ahead
+            (TASK_TEMPLATES[sk] || [])
+              .filter(t => t.owner === "customer")
+              .forEach(t => customerTasks.push({
+                title: t.title, stageKey: sk,
+                owner: "customer", ownerRole: "customer",
+                customerNote: t.customerNote || null,
+                done: false, startDate: null, endDate: null,
+                fromTemplate: true,
+              }));
+          }
         });
         if (!customerTasks.length) return null;
-
         const pending = customerTasks.filter(t => !t.done);
-        const done = customerTasks.filter(t => t.done);
 
         return (
           <Card style={{ marginBottom: 16 }}>
