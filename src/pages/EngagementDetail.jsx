@@ -169,7 +169,7 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   function onPointerDown(e, taskIdx, mode) {
     if (!stateRef.current.canEdit) return;
     const t = stateRef.current.allTasks[taskIdx];
-    if (!t || t.done) return;
+    if (!t || t.done || t.locked) return;
     e.preventDefault();
     stateRef.current.drag = {
       taskIdx, mode,
@@ -235,7 +235,7 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
           const x2 = xPos(t.endDate   || workingDayAdd(t.startDate || todayIso(), 1));
           const barW = Math.max(x2 - x1, 8);
           const y = i*ROW_H+24+4, barH = ROW_H-8;
-          const isDraggable = canEdit && !t.done;
+          const isDraggable = canEdit && !t.done && !t.locked;
           const isDragging  = drag?.taskIdx === i;
 
           return (
@@ -251,7 +251,9 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
               )}
 
               <rect x={x1} y={y} width={barW} height={barH} rx={3}
-                fill={t.done ? colour+"30" : isDragging ? colour+"99" : colour+"60"}
+                fill={t.done ? colour+"30" : t.locked ? colour+"45" : isDragging ? colour+"99" : colour+"60"}
+                stroke={t.locked ? colour : "none"} strokeWidth={t.locked ? 1.5 : 0}
+                strokeDasharray={t.locked ? "4 2" : "none"}
                 style={{ cursor: isDraggable ? "grab" : "default" }}
                 onMouseDown={e => onPointerDown(e, i, "move")}
                 onTouchStart={e => onPointerDown(e, i, "move")}
@@ -263,6 +265,11 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
                 <text x={x1+barW/2} y={y+barH/2+1} textAnchor="middle"
                   dominantBaseline="middle" fill={colour} fontSize={9} fontWeight="700"
                   style={{ pointerEvents: "none" }}>✓</text>
+              )}
+              {t.locked && !t.done && (
+                <text x={x1+barW-8} y={y+barH/2+1} textAnchor="middle"
+                  dominantBaseline="middle" fontSize={9}
+                  style={{ pointerEvents: "none" }}>🔒</text>
               )}
 
               {isDraggable && barW > 20 && (
@@ -334,28 +341,42 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
 function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 80px 28px",
+      display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 56px 28px 28px",
       gap: 8, padding: "9px 16px", borderBottom: "1px solid var(--border)",
       alignItems: "center", opacity: task.done ? 0.6 : 1, transition: "opacity 0.15s",
+      background: task.locked ? "rgba(101,89,255,0.03)" : "transparent",
     }}>
       <input type="checkbox" checked={task.done} onChange={e => onUpdate({ done: e.target.checked })}
         style={{ accentColor: sc, cursor: "pointer", width: 14, height: 14 }}/>
-      <input value={task.title} onChange={e => onUpdate({ title: e.target.value })}
-        style={{ fontSize: 12, padding: "4px 8px", border: "1px solid transparent", borderRadius: 6, background: "transparent", fontFamily: "inherit", width: "100%", outline: "none" }}
-        onFocus={e => e.target.style.borderColor = "var(--border)"}
-        onBlur={e => e.target.style.borderColor = "transparent"}
-      />
+      <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
+        {task.locked && (
+          <span title="Date locked — won't move with ripple" style={{ fontSize: 11, flexShrink: 0 }}>🔒</span>
+        )}
+        <input value={task.title} onChange={e => onUpdate({ title: e.target.value })}
+          style={{ fontSize: 12, padding: "4px 8px", border: "1px solid transparent", borderRadius: 6, background: "transparent", fontFamily: "inherit", width: "100%", outline: "none", minWidth: 0 }}
+          onFocus={e => e.target.style.borderColor = "var(--border)"}
+          onBlur={e => e.target.style.borderColor = "transparent"}
+        />
+      </div>
       <Select value={task.ownerUid || ""} onChange={e => onUpdate({ ownerUid: e.target.value })} style={{ fontSize: 11, padding: "4px 8px" }}>
         <option value="">Unassigned</option>
         {users.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
       </Select>
       <input type="date" value={task.startDate || ""} onChange={e => onUpdate({ startDate: e.target.value })}
-        style={{ fontSize: 11, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 6, fontFamily: "inherit", outline: "none" }}/>
+        style={{ fontSize: 11, padding: "4px 8px", border: `1px solid ${task.locked ? "var(--purple)" : "var(--border)"}`, borderRadius: 6, fontFamily: "inherit", outline: "none" }}/>
       <input type="date" value={task.endDate || ""} onChange={e => onUpdate({ endDate: e.target.value })}
-        style={{ fontSize: 11, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 6, fontFamily: "inherit", outline: "none" }}/>
+        style={{ fontSize: 11, padding: "4px 8px", border: `1px solid ${task.locked ? "var(--purple)" : "var(--border)"}`, borderRadius: 6, fontFamily: "inherit", outline: "none" }}/>
       <Pill color={task.done ? "green" : task.required ? "purple" : "grey"} style={{ fontSize: 10 }}>
         {task.done ? "Done" : task.required ? "Req" : "Opt"}
       </Pill>
+      {/* Lock / unlock button */}
+      <button
+        onClick={() => onUpdate({ locked: !task.locked })}
+        title={task.locked ? "Unlock — allow ripple to move this task" : "Lock — fix this date, ripple won't move it"}
+        style={{ background: task.locked ? "var(--purple-light)" : "none", border: "none", cursor: "pointer", fontSize: 13, padding: 2, borderRadius: 4, color: task.locked ? "var(--purple)" : "var(--text-muted)" }}
+        onMouseEnter={e => { if (!task.locked) e.currentTarget.style.color = "var(--purple)"; }}
+        onMouseLeave={e => { if (!task.locked) e.currentTarget.style.color = "var(--text-muted)"; }}
+      >{task.locked ? "🔒" : "🔓"}</button>
       <button onClick={onDelete} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 13, padding: 2 }}
         onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
         onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
