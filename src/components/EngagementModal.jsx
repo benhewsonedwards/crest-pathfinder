@@ -15,6 +15,228 @@ const BLANK = {
   modules: [], integrations: [], notes: "",
 };
 
+const BLANK_CUST = {
+  name: "", sfAccountId: "", region: "EMEA", segment: "Enterprise",
+  subscription: "Enterprise", arr: "", currency: "GBP £",
+  industry: "", website: "", csmName: "", comName: "", aeName: "",
+};
+
+// ─── Inline customer picker ───────────────────────────────────────────────────
+function CustomerPicker({ customers, value, customerId, onChange, onCreateCustomer }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newCust, setNewCust] = useState(BLANK_CUST);
+  const [saving, setSaving] = useState(false);
+
+  const filtered = customers.filter(c =>
+    !search || c.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selected = customers.find(c => c.id === customerId);
+
+  async function handleCreate() {
+    if (!newCust.name.trim()) return;
+    setSaving(true);
+    const ref = await addDoc(collection(db, "customers"), {
+      ...newCust, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    });
+    // Notify parent so it can select the newly created customer
+    onChange(newCust.name, ref.id);
+    setCreating(false);
+    setOpen(false);
+    setSearch("");
+    setNewCust(BLANK_CUST);
+    setSaving(false);
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      {/* Trigger button */}
+      <button
+        type="button"
+        onClick={() => { setOpen(o => !o); setSearch(""); setCreating(false); }}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "8px 12px", borderRadius: "var(--radius-sm)",
+          background: "var(--surface2)", border: `1px solid ${open ? "var(--purple)" : "var(--border)"}`,
+          cursor: "pointer", fontFamily: "inherit", fontSize: 13, transition: "border-color 0.15s",
+          color: selected ? "var(--text-primary)" : "var(--text-muted)",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {selected ? (
+            <>
+              <span style={{
+                width: 22, height: 22, borderRadius: "var(--radius-sm)",
+                background: "var(--purple-light)", color: "var(--purple)",
+                fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0,
+              }}>{selected.name.slice(0, 2).toUpperCase()}</span>
+              {selected.name}
+            </>
+          ) : (
+            <span>Select or create a customer…</span>
+          )}
+        </span>
+        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{open ? "▲" : "▼"}</span>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, zIndex: 100,
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "var(--radius)", boxShadow: "var(--shadow-lg)",
+          maxHeight: 320, display: "flex", flexDirection: "column",
+        }}>
+          {!creating ? (
+            <>
+              {/* Search */}
+              <div style={{ padding: "10px 12px", borderBottom: "1px solid var(--border)" }}>
+                <Input
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  placeholder="Search customers…"
+                  style={{ fontSize: 12 }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Customer list */}
+              <div style={{ overflowY: "auto", flex: 1 }}>
+                {/* Clear selection option */}
+                {customerId && (
+                  <button
+                    type="button"
+                    onClick={() => { onChange("", ""); setOpen(false); }}
+                    style={{ width: "100%", padding: "8px 14px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: 12, color: "var(--text-muted)", fontFamily: "inherit", borderBottom: "1px solid var(--border)" }}
+                  >
+                    ✕ Clear selection
+                  </button>
+                )}
+
+                {filtered.length === 0 && (
+                  <p style={{ padding: "12px 14px", fontSize: 12, color: "var(--text-muted)" }}>
+                    {search ? `No customers match "${search}"` : "No customers yet"}
+                  </p>
+                )}
+
+                {filtered.map(c => {
+                  const isSelected = c.id === customerId;
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => { onChange(c.name, c.id); setOpen(false); setSearch(""); }}
+                      style={{
+                        width: "100%", padding: "9px 14px", background: isSelected ? "var(--purple-light)" : "none",
+                        border: "none", cursor: "pointer", textAlign: "left", fontFamily: "inherit",
+                        display: "flex", alignItems: "center", gap: 10,
+                        borderBottom: "1px solid var(--border)",
+                        transition: "background 0.1s",
+                      }}
+                      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "var(--surface2)"; }}
+                      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "none"; }}
+                    >
+                      <div style={{
+                        width: 26, height: 26, borderRadius: "var(--radius-sm)", flexShrink: 0,
+                        background: isSelected ? "var(--purple)" : "var(--purple-light)",
+                        color: isSelected ? "white" : "var(--purple)",
+                        fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center",
+                      }}>{c.name.slice(0, 2).toUpperCase()}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, fontWeight: isSelected ? 600 : 400, color: isSelected ? "var(--purple)" : "var(--text-primary)" }}>{c.name}</p>
+                        <p style={{ fontSize: 10, color: "var(--text-muted)" }}>
+                          {[c.segment, c.region, c.csmName && `CSM: ${c.csmName}`].filter(Boolean).join(" · ")}
+                        </p>
+                      </div>
+                      {isSelected && <span style={{ fontSize: 12, color: "var(--purple)" }}>✓</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Add new customer */}
+              <div style={{ borderTop: "1px solid var(--border)", padding: "8px 12px" }}>
+                <button
+                  type="button"
+                  onClick={() => setCreating(true)}
+                  style={{
+                    width: "100%", padding: "8px 12px", borderRadius: "var(--radius-sm)",
+                    background: "var(--purple-light)", border: "1px dashed var(--purple)",
+                    cursor: "pointer", color: "var(--purple)", fontSize: 12, fontWeight: 600,
+                    fontFamily: "inherit", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                  }}
+                >
+                  + Create new customer record
+                </button>
+              </div>
+            </>
+          ) : (
+            /* Inline customer create form */
+            <div style={{ padding: 14, overflowY: "auto" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                <button
+                  type="button"
+                  onClick={() => setCreating(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: 0, fontFamily: "inherit" }}
+                >
+                  ← Back
+                </button>
+                <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>New customer record</p>
+              </div>
+              <FieldGroup label="Customer name" required>
+                <Input value={newCust.name} onChange={e => setNewCust(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Network Rail" autoFocus />
+              </FieldGroup>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <FieldGroup label="Region">
+                  <Select value={newCust.region} onChange={e => setNewCust(f => ({ ...f, region: e.target.value }))}>
+                    {REGIONS.map(r => <option key={r}>{r}</option>)}
+                  </Select>
+                </FieldGroup>
+                <FieldGroup label="Segment">
+                  <Select value={newCust.segment} onChange={e => setNewCust(f => ({ ...f, segment: e.target.value }))}>
+                    {SEGMENTS.map(s => <option key={s}>{s}</option>)}
+                  </Select>
+                </FieldGroup>
+                <FieldGroup label="CSM name">
+                  <Input value={newCust.csmName} onChange={e => setNewCust(f => ({ ...f, csmName: e.target.value }))} placeholder="e.g. Hanaa Ashraf" />
+                </FieldGroup>
+                <FieldGroup label="ARR">
+                  <Input value={newCust.arr} type="number" onChange={e => setNewCust(f => ({ ...f, arr: e.target.value }))} placeholder="e.g. 45000" />
+                </FieldGroup>
+              </div>
+              <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10 }}>
+                You can fill in the rest of the details from the Customers page later.
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn variant="ghost" onClick={() => setCreating(false)} style={{ flex: 1 }}>Cancel</Btn>
+                <Btn onClick={handleCreate} disabled={saving || !newCust.name.trim()} style={{ flex: 1 }}>
+                  {saving ? "Creating…" : "Create & select"}
+                </Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Status hint below */}
+      {selected && (
+        <p style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
+          ✓ Linked to customer record — engagement will appear in their dashboard
+        </p>
+      )}
+      {!selected && value && (
+        <p style={{ fontSize: 11, color: "var(--amber)", marginTop: 4 }}>
+          ⚠ No customer record linked — engagement will not appear in the Customers tab
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─── Main modal ───────────────────────────────────────────────────────────────
 export default function EngagementModal({ open, onClose, initial, users, customers = [] }) {
   const { user } = useAuth();
   const isEdit = !!initial?.id;
@@ -27,14 +249,6 @@ export default function EngagementModal({ open, onClose, initial, users, custome
     const arr = form[field] || [];
     upd(field, arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
   };
-
-  // When customer name is typed, try to auto-link to a customer record
-  function handleCustomerChange(name) {
-    upd("customer", name);
-    const match = customers.find(c => c.name?.toLowerCase() === name.toLowerCase());
-    if (match) upd("customerId", match.id);
-    else upd("customerId", "");
-  }
 
   async function handleSave() {
     if (!form.customer.trim()) return;
@@ -80,30 +294,13 @@ export default function EngagementModal({ open, onClose, initial, users, custome
       {tab === "core" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div style={{ gridColumn: "1 / -1" }}>
-            <FieldGroup label="Customer name" required>
-              <div style={{ position: "relative" }}>
-                <Input
-                  value={form.customer}
-                  onChange={e => handleCustomerChange(e.target.value)}
-                  placeholder="e.g. Network Rail"
-                  list="customer-list"
-                />
-                {customers.length > 0 && (
-                  <datalist id="customer-list">
-                    {customers.map(c => <option key={c.id} value={c.name} />)}
-                  </datalist>
-                )}
-              </div>
-              {form.customerId && (
-                <p style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
-                  ✓ Linked to customer record
-                </p>
-              )}
-              {form.customer && !form.customerId && customers.length > 0 && (
-                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
-                  No matching customer record — will create engagement only
-                </p>
-              )}
+            <FieldGroup label="Customer" required>
+              <CustomerPicker
+                customers={customers}
+                value={form.customer}
+                customerId={form.customerId}
+                onChange={(name, id) => { upd("customer", name); upd("customerId", id); }}
+              />
             </FieldGroup>
           </div>
           <FieldGroup label="CS Request ID"><Input value={form.csId} onChange={e => upd("csId", e.target.value)} placeholder="CS-00000"/></FieldGroup>
