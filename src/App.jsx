@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, onSnapshot as docSnap } from "firebase/firestore";
+import { collection, onSnapshot, doc } from "firebase/firestore";
 import { db } from "./lib/firebase";
 import { AuthProvider, useAuth } from "./hooks/useAuth";
 import LoginPage from "./pages/LoginPage";
@@ -27,6 +27,7 @@ function AppShell() {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [users, setUsers] = useState([]);
+  const [customers, setCustomers] = useState([]);
 
   // Set landing page once profile loads
   useEffect(() => {
@@ -38,9 +39,13 @@ function AppShell() {
   // Load all users for assignment dropdowns
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(collection(db, "users"), snap => {
+    const u1 = onSnapshot(collection(db, "users"), snap => {
       setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
     });
+    const u2 = onSnapshot(collection(db, "customers"), snap => {
+      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { u1(); u2(); };
   }, [user]);
 
   // Keep selected engagement live

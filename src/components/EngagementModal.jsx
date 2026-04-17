@@ -6,7 +6,7 @@ import { STAGES, REGIONS, SEGMENTS, SUBSCRIPTIONS, OPP_TYPES, TSHIRT_SIZES, CURR
 import { Modal, Btn, Input, Select, Textarea, FieldGroup, Label, Pill } from "../components/UI";
 
 const BLANK = {
-  customer: "", csId: "", sfOppId: "", sfOppLink: "", jiraKey: "", jiraLink: "",
+  customer: "", customerId: "", csId: "", sfOppId: "", sfOppLink: "", jiraKey: "", jiraLink: "",
   region: "EMEA", segment: "Enterprise", subscription: "Enterprise",
   oppType: "New Business", tshirt: "Standard", currency: "GBP £",
   arr: "", targetArr: "", closeDate: "", planType: "Onboarding",
@@ -15,7 +15,7 @@ const BLANK = {
   modules: [], integrations: [], notes: "",
 };
 
-export default function EngagementModal({ open, onClose, initial, users }) {
+export default function EngagementModal({ open, onClose, initial, users, customers = [] }) {
   const { user } = useAuth();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? { ...BLANK, ...initial } : { ...BLANK });
@@ -27,6 +27,14 @@ export default function EngagementModal({ open, onClose, initial, users }) {
     const arr = form[field] || [];
     upd(field, arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
   };
+
+  // When customer name is typed, try to auto-link to a customer record
+  function handleCustomerChange(name) {
+    upd("customer", name);
+    const match = customers.find(c => c.name?.toLowerCase() === name.toLowerCase());
+    if (match) upd("customerId", match.id);
+    else upd("customerId", "");
+  }
 
   async function handleSave() {
     if (!form.customer.trim()) return;
@@ -73,7 +81,29 @@ export default function EngagementModal({ open, onClose, initial, users }) {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div style={{ gridColumn: "1 / -1" }}>
             <FieldGroup label="Customer name" required>
-              <Input value={form.customer} onChange={e => upd("customer", e.target.value)} placeholder="e.g. Network Rail"/>
+              <div style={{ position: "relative" }}>
+                <Input
+                  value={form.customer}
+                  onChange={e => handleCustomerChange(e.target.value)}
+                  placeholder="e.g. Network Rail"
+                  list="customer-list"
+                />
+                {customers.length > 0 && (
+                  <datalist id="customer-list">
+                    {customers.map(c => <option key={c.id} value={c.name} />)}
+                  </datalist>
+                )}
+              </div>
+              {form.customerId && (
+                <p style={{ fontSize: 11, color: "var(--green)", marginTop: 4 }}>
+                  ✓ Linked to customer record
+                </p>
+              )}
+              {form.customer && !form.customerId && customers.length > 0 && (
+                <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
+                  No matching customer record — will create engagement only
+                </p>
+              )}
             </FieldGroup>
           </div>
           <FieldGroup label="CS Request ID"><Input value={form.csId} onChange={e => upd("csId", e.target.value)} placeholder="CS-00000"/></FieldGroup>
