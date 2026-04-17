@@ -8,16 +8,32 @@ import EngagementsPage from "./pages/EngagementsPage";
 import EngagementDetail from "./pages/EngagementDetail";
 import TeamPage from "./pages/TeamPage";
 import IssuesPage from "./pages/IssuesPage";
+import CustomersPage from "./pages/CustomersPage";
+import CustomerDashboard from "./pages/CustomerDashboard";
 import Sidebar from "./components/Sidebar";
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
 
+// Role-based default landing page
+function defaultPage(role) {
+  if (role === "csm" || role === "com") return "customers";
+  return "pipeline";
+}
+
 function AppShell() {
-  const { user, loading } = useAuth();
-  const [page, setPage] = useState("pipeline");
+  const { user, profile, loading } = useAuth();
+  const [page, setPage] = useState(null); // null = waiting for profile
   const [selectedEngagement, setSelectedEngagement] = useState(null);
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
   const [users, setUsers] = useState([]);
+
+  // Set landing page once profile loads
+  useEffect(() => {
+    if (profile && page === null) {
+      setPage(defaultPage(profile.role));
+    }
+  }, [profile, page]);
 
   // Load all users for assignment dropdowns
   useEffect(() => {
@@ -27,7 +43,7 @@ function AppShell() {
     });
   }, [user]);
 
-  // Keep selected engagement live — re-subscribe when it changes
+  // Keep selected engagement live
   useEffect(() => {
     if (!selectedEngagement?.id) return;
     const unsub = onSnapshot(doc(db, "engagements", selectedEngagement.id), snap => {
@@ -36,7 +52,16 @@ function AppShell() {
     return unsub;
   }, [selectedEngagement?.id]);
 
-  if (loading) {
+  // Keep selected customer live
+  useEffect(() => {
+    if (!selectedCustomer?.id) return;
+    const unsub = onSnapshot(doc(db, "customers", selectedCustomer.id), snap => {
+      if (snap.exists()) setSelectedCustomer({ id: snap.id, ...snap.data() });
+    });
+    return unsub;
+  }, [selectedCustomer?.id]);
+
+  if (loading || (user && page === null)) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)" }}>
         <div style={{ textAlign: "center" }}>
@@ -51,27 +76,48 @@ function AppShell() {
 
   function handleSelectEngagement(eng) {
     setSelectedEngagement(eng);
+    setSelectedCustomer(null);
     setPage("engagements");
   }
 
-  function handleBack() {
+  function handleSelectCustomer(customer) {
+    setSelectedCustomer(customer);
     setSelectedEngagement(null);
-    setPage("pipeline");
+    setPage("customers");
   }
+
+  function handleNav(p) {
+    setPage(p);
+    if (p !== "engagements") setSelectedEngagement(null);
+    if (p !== "customers") setSelectedCustomer(null);
+  }
+
+  const activePage = selectedEngagement ? "engagements" : selectedCustomer ? "customers" : page;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg)" }}>
-      <Sidebar
-        active={selectedEngagement ? "engagements" : page}
-        onChange={p => { setPage(p); if (p !== "engagements") setSelectedEngagement(null); }}
-      />
+      <Sidebar active={activePage} onChange={handleNav} />
 
       <main style={{ flex: 1, overflowY: "auto", minWidth: 0 }}>
+        {/* Engagement detail */}
         {selectedEngagement ? (
           <EngagementDetail
             engagement={selectedEngagement}
-            onBack={handleBack}
+            onBack={() => { setSelectedEngagement(null); setPage("pipeline"); }}
             users={users}
+          />
+        /* Customer dashboard */
+        ) : selectedCustomer ? (
+          <CustomerDashboard
+            customer={selectedCustomer}
+            onBack={() => { setSelectedCustomer(null); setPage("customers"); }}
+            users={users}
+          />
+        /* Pages */
+        ) : page === "customers" ? (
+          <CustomersPage
+            onSelectCustomer={handleSelectCustomer}
+            onNewCustomer={() => {}}
           />
         ) : page === "pipeline" ? (
           <PipelinePage
