@@ -177,12 +177,14 @@ function ActivityLog({ engagementId }) {
 }
 
 // ─── Main engagement detail ───────────────────────────────────────────────────
-export default function EngagementDetail({ engagement, onBack, users, onOpenCustomer }) {
+export default function EngagementDetail({ engagement, onBack, users, onOpenCustomer, customers = [] }) {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeStage, setActiveStage] = useState(engagement.currentStage);
   const [stageSubTab, setStageSubTab] = useState("tasks");
   const [saving, setSaving] = useState(false);
+  const [showLinkCustomer, setShowLinkCustomer] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
 
@@ -249,17 +251,109 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, display: "flex", alignItems: "center", gap: 5, padding: 0, fontFamily: "inherit" }}>
           ← All engagements
         </button>
-        {(engagement.customerId || engagement.customer) && onOpenCustomer && (
-          <button
-            onClick={() => onOpenCustomer(engagement.customerId, engagement.customer)}
-            style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-second)", fontSize: 12, padding: "5px 12px", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all 0.13s" }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--purple)"; e.currentTarget.style.color = "var(--purple)"; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-second)"; }}
-          >
-            🏢 Open customer record →
-          </button>
-        )}
+        <div style={{ display: "flex", gap: 8 }}>
+          {/* Linked customer badge or link button */}
+          {engagement.customerId && onOpenCustomer ? (
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <button
+                onClick={() => onOpenCustomer(engagement.customerId, engagement.customer)}
+                style={{ background: "var(--green-light)", border: "1px solid var(--green)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--green)", fontSize: 12, padding: "5px 12px", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, fontWeight: 600 }}
+              >
+                🏢 {engagement.customer} →
+              </button>
+              {canEdit && (
+                <button
+                  onClick={() => { setCustomerSearch(""); setShowLinkCustomer(true); }}
+                  style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "5px 8px", fontFamily: "inherit" }}
+                  title="Change linked customer"
+                >
+                  ✎
+                </button>
+              )}
+            </div>
+          ) : canEdit && customers.length > 0 ? (
+            <button
+              onClick={() => { setCustomerSearch(""); setShowLinkCustomer(true); }}
+              style={{ background: "none", border: "1px dashed var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "5px 12px", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5, transition: "all 0.13s" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--purple)"; e.currentTarget.style.color = "var(--purple)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >
+              🔗 Link to customer record
+            </button>
+          ) : null}
+        </div>
       </div>
+
+      {/* Customer link picker modal */}
+      <Modal open={showLinkCustomer} onClose={() => setShowLinkCustomer(false)} title="Link to customer record" width={480}>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14 }}>
+          Select the customer record this engagement belongs to.
+        </p>
+        <Input
+          value={customerSearch}
+          onChange={e => setCustomerSearch(e.target.value)}
+          placeholder="Search customers..."
+          style={{ marginBottom: 12 }}
+        />
+        <div style={{ maxHeight: 320, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
+          {customers
+            .filter(c => !customerSearch || c.name?.toLowerCase().includes(customerSearch.toLowerCase()))
+            .map(c => {
+              const isLinked = engagement.customerId === c.id;
+              return (
+                <button
+                  key={c.id}
+                  onClick={async () => {
+                    await updateDoc(doc(db, "engagements", engagement.id), {
+                      customerId: c.id,
+                      customer: c.name,   // keep name in sync
+                      updatedAt: serverTimestamp(),
+                    });
+                    setShowLinkCustomer(false);
+                    setCustomerSearch("");
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "10px 14px", borderRadius: "var(--radius-sm)",
+                    background: isLinked ? "var(--green-light)" : "var(--surface2)",
+                    border: `1px solid ${isLinked ? "var(--green)" : "var(--border)"}`,
+                    cursor: "pointer", fontFamily: "inherit", textAlign: "left",
+                    transition: "all 0.13s",
+                  }}
+                  onMouseEnter={e => { if (!isLinked) { e.currentTarget.style.background = "var(--purple-light)"; e.currentTarget.style.borderColor = "var(--purple)"; }}}
+                  onMouseLeave={e => { if (!isLinked) { e.currentTarget.style.background = "var(--surface2)"; e.currentTarget.style.borderColor = "var(--border)"; }}}
+                >
+                  <div>
+                    <p style={{ fontSize: 13, fontWeight: 600, color: isLinked ? "var(--green)" : "var(--text-primary)" }}>{c.name}</p>
+                    <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
+                      {[c.segment, c.region, c.csmName && `CSM: ${c.csmName}`].filter(Boolean).join(" · ")}
+                    </p>
+                  </div>
+                  {isLinked && <span style={{ fontSize: 12, color: "var(--green)", fontWeight: 600 }}>✓ linked</span>}
+                </button>
+              );
+            })}
+          {customers.filter(c => !customerSearch || c.name?.toLowerCase().includes(customerSearch.toLowerCase())).length === 0 && (
+            <p style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>No customers match</p>
+          )}
+        </div>
+        {engagement.customerId && (
+          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+            <button
+              onClick={async () => {
+                await updateDoc(doc(db, "engagements", engagement.id), {
+                  customerId: "",
+                  updatedAt: serverTimestamp(),
+                });
+                setShowLinkCustomer(false);
+              }}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--red)", fontSize: 12, fontFamily: "inherit", padding: 0 }}
+            >
+              Remove customer link
+            </button>
+          </div>
+        )}
+      </Modal>
 
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20 }}>
         <div>

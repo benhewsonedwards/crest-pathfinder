@@ -125,6 +125,7 @@ function AppShell() {
             engagement={selectedEngagement}
             onBack={() => { setSelectedEngagement(null); setPage("pipeline"); }}
             users={users}
+            customers={customers}
             onOpenCustomer={handleOpenCustomer}
           />
         /* Customer dashboard */
