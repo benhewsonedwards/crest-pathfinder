@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import React from "react";
 import { doc, updateDoc, deleteDoc, serverTimestamp, collection, addDoc, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
@@ -10,24 +11,139 @@ import {
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 
-// ─── Gantt chart ──────────────────────────────────────────────────────────────
-function GanttChart({ stageTasks }) {
+// ─── Interactive Gantt chart ──────────────────────────────────────────────────
+function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
+  const svgRef = React.useRef(null);
+  const dragRef = React.useRef(null); // { taskIdx, mode:'move'|'left'|'right', startX, origStart, origEnd }
+  const [tooltip, setTooltip] = React.useState(null); // { x, y, start, end }
+  const [localTasks, setLocalTasks] = React.useState(null); // optimistic during drag
+
   const allTasks = [];
   STAGE_KEYS.forEach(sk => (stageTasks[sk] || []).forEach(t => allTasks.push({ ...t, stageKey: sk })));
   if (allTasks.length === 0) return <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "20px 0" }}>No tasks defined yet. Add tasks to stages to see the Gantt.</p>;
 
-  const allDates = allTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
+  const displayTasks = localTasks || allTasks;
+
+  const allDates = displayTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
   if (allDates.length === 0) return null;
   const minDate = new Date(allDates[0]);
   const maxDate = new Date(allDates[allDates.length - 1]);
   minDate.setDate(minDate.getDate() - 2);
-  maxDate.setDate(maxDate.getDate() + 3);
+  maxDate.setDate(maxDate.getDate() + 5);
   const totalDays = diffDays(minDate.toISOString().slice(0,10), maxDate.toISOString().slice(0,10));
 
   const ROW_H = 30, LABEL_W = 170, CHART_W = Math.max(totalDays * 14, 600);
   const SVG_W = LABEL_W + CHART_W + 20, SVG_H = allTasks.length * ROW_H + 44;
+  const PX_PER_DAY = CHART_W / totalDays;
 
-  function xPos(iso) { return LABEL_W + (diffDays(minDate.toISOString().slice(0,10), iso) / totalDays) * CHART_W; }
+  const minIso = minDate.toISOString().slice(0,10);
+
+  function xPos(iso) {
+    if (!iso) return LABEL_W;
+    return LABEL_W + (diffDays(minIso, iso) / totalDays) * CHART_W;
+  }
+
+  // Convert svg x position to nearest ISO working day
+  function xToIso(x) {
+    const rawDays = (x - LABEL_W) / PX_PER_DAY;
+    const d = new Date(minDate);
+    d.setDate(d.getDate() + Math.round(rawDays));
+    // Snap to working day
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0,10);
+  }
+
+  function getSvgX(e) {
+    if (!svgRef.current) return 0;
+    const rect = svgRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return (clientX - rect.left) * (SVG_W / rect.width);
+  }
+
+  function onPointerDown(e, taskIdx, mode) {
+    if (!canEdit) return;
+    const t = allTasks[taskIdx];
+    if (t.done) return; // done tasks are frozen
+    e.preventDefault();
+    dragRef.current = {
+      taskIdx, mode,
+      startX: getSvgX(e),
+      origStart: t.startDate,
+      origEnd: t.endDate,
+    };
+    // Clone tasks for optimistic local updates during drag
+    setLocalTasks(allTasks.map(x => ({ ...x })));
+    window.addEventListener("mousemove", onPointerMove);
+    window.addEventListener("mouseup", onPointerUp);
+    window.addEventListener("touchmove", onPointerMove, { passive: false });
+    window.addEventListener("touchend", onPointerUp);
+  }
+
+  function onPointerMove(e) {
+    if (!dragRef.current) return;
+    if (e.preventDefault) e.preventDefault();
+    const { taskIdx, mode, startX, origStart, origEnd } = dragRef.current;
+    const dx = getSvgX(e) - startX;
+    const daysDelta = Math.round(dx / PX_PER_DAY);
+
+    setLocalTasks(prev => {
+      const next = prev.map(x => ({ ...x }));
+      const t = next[taskIdx];
+      const dur = diffDays(origStart, origEnd);
+
+      if (mode === "move") {
+        const newStart = shiftIso(origStart, daysDelta);
+        const newEnd   = shiftIso(origEnd, daysDelta);
+        t.startDate = newStart;
+        t.endDate   = newEnd;
+      } else if (mode === "left") {
+        const newStart = shiftIso(origStart, daysDelta);
+        if (newStart < t.endDate) t.startDate = newStart;
+      } else {
+        const newEnd = shiftIso(origEnd, daysDelta);
+        if (newEnd > t.startDate) t.endDate = newEnd;
+      }
+
+      // Show tooltip
+      const midX = (xPos(t.startDate) + xPos(t.endDate)) / 2;
+      const y = taskIdx * ROW_H + 24 + ROW_H / 2;
+      setTooltip({ x: midX, y, start: t.startDate, end: t.endDate });
+      return next;
+    });
+  }
+
+  function shiftIso(iso, days) {
+    if (!iso) return iso;
+    const d = new Date(iso);
+    // Shift by calendar days then snap to working day
+    d.setDate(d.getDate() + days);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0,10);
+  }
+
+  function onPointerUp() {
+    window.removeEventListener("mousemove", onPointerMove);
+    window.removeEventListener("mouseup", onPointerUp);
+    window.removeEventListener("touchmove", onPointerMove);
+    window.removeEventListener("touchend", onPointerUp);
+    setTooltip(null);
+
+    if (!dragRef.current || !localTasks) { dragRef.current = null; setLocalTasks(null); return; }
+    const { taskIdx } = dragRef.current;
+    const updated = localTasks[taskIdx];
+    const original = allTasks[taskIdx];
+
+    dragRef.current = null;
+    setLocalTasks(null);
+
+    // Only save if something actually changed
+    if (updated.startDate !== original.startDate || updated.endDate !== original.endDate) {
+      onUpdateTask(original.stageKey, original.id, {
+        startDate: updated.startDate,
+        endDate: updated.endDate,
+      });
+    }
+  }
 
   const months = [];
   const cur = new Date(minDate);
@@ -37,50 +153,127 @@ function GanttChart({ stageTasks }) {
   }
   const todayX = xPos(todayIso());
   const showToday = todayX > LABEL_W && todayX < LABEL_W + CHART_W;
+  const HANDLE_W = 6; // resize handle width in px
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <svg width={SVG_W} height={SVG_H} style={{ display: "block", fontFamily: "Inter, sans-serif" }}>
-        {allTasks.map((_, i) => <rect key={i} x={0} y={i*ROW_H+24} width={SVG_W} height={ROW_H} fill={i%2===0?"#F8F9FC":"#FFFFFF"}/>)}
+    <div style={{ overflowX: "auto", userSelect: "none" }}>
+      <svg ref={svgRef} width={SVG_W} height={SVG_H}
+        style={{ display: "block", fontFamily: "Inter, sans-serif", touchAction: "none" }}
+      >
+        {/* Row backgrounds */}
+        {displayTasks.map((_, i) => <rect key={i} x={0} y={i*ROW_H+24} width={SVG_W} height={ROW_H} fill={i%2===0?"#F8F9FC":"#FFFFFF"}/>)}
+
+        {/* Month gridlines + labels */}
         {months.map((m, i) => (
           <g key={i}>
             <line x1={m.x} y1={0} x2={m.x} y2={SVG_H} stroke="#E4E7EF" strokeWidth={1}/>
             <text x={m.x+4} y={14} fill="#9CA3AF" fontSize={9}>{m.label}</text>
           </g>
         ))}
+
+        {/* Today line */}
         {showToday && (
           <g>
             <line x1={todayX} y1={0} x2={todayX} y2={SVG_H} stroke="#D97706" strokeWidth={1.5} strokeDasharray="4 3"/>
             <text x={todayX+3} y={14} fill="#D97706" fontSize={9} fontWeight="600">Today</text>
           </g>
         )}
-        {allTasks.map((t, i) => {
+
+        {/* Task bars */}
+        {displayTasks.map((t, i) => {
           const colour = stageColour(t.stageKey);
           const x1 = xPos(t.startDate || todayIso());
           const x2 = xPos(t.endDate || workingDayAdd(t.startDate || todayIso(), 1));
-          const barW = Math.max(x2 - x1, 6);
+          const barW = Math.max(x2 - x1, 8);
           const y = i*ROW_H+24+4, barH = ROW_H-8;
+          const isDraggable = canEdit && !t.done;
+          const isDragging = dragRef.current?.taskIdx === i;
+
           return (
-            <g key={i}>
-              <text x={LABEL_W-8} y={y+barH/2+4} fill={t.done?"#9CA3AF":"#4B5563"} fontSize={10} textAnchor="end" dominantBaseline="middle">
+            <g key={t.id || i}>
+              {/* Label */}
+              <text x={LABEL_W-8} y={y+barH/2+4}
+                fill={t.done?"#9CA3AF":"#4B5563"} fontSize={10}
+                textAnchor="end" dominantBaseline="middle">
                 {t.title.length > 24 ? t.title.slice(0,22)+"…" : t.title}
               </text>
-              <rect x={x1} y={y} width={barW} height={barH} rx={3} fill={t.done ? colour+"30" : colour+"60"}/>
-              <rect x={x1} y={y} width={3} height={barH} rx={1} fill={colour}/>
-              {t.done && <text x={x1+barW/2} y={y+barH/2+1} textAnchor="middle" dominantBaseline="middle" fill={colour} fontSize={9} fontWeight="700">✓</text>}
+
+              {/* Bar shadow during drag */}
+              {isDragging && (
+                <rect x={x1+2} y={y+2} width={barW} height={barH} rx={3}
+                  fill="rgba(0,0,0,0.08)" />
+              )}
+
+              {/* Bar body */}
+              <rect x={x1} y={y} width={barW} height={barH} rx={3}
+                fill={t.done ? colour+"30" : isDragging ? colour+"90" : colour+"60"}
+                style={{ cursor: isDraggable ? "grab" : "default" }}
+                onMouseDown={e => onPointerDown(e, i, "move")}
+                onTouchStart={e => onPointerDown(e, i, "move")}
+              />
+
+              {/* Left accent */}
+              <rect x={x1} y={y} width={3} height={barH} rx={1} fill={colour}
+                style={{ pointerEvents: "none" }} />
+
+              {/* Done tick */}
+              {t.done && (
+                <text x={x1+barW/2} y={y+barH/2+1}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fill={colour} fontSize={9} fontWeight="700" style={{ pointerEvents: "none" }}>✓</text>
+              )}
+
+              {/* Resize handles — only shown when canEdit and not done */}
+              {isDraggable && barW > 20 && (
+                <>
+                  {/* Left resize */}
+                  <rect x={x1} y={y} width={HANDLE_W} height={barH} rx={2}
+                    fill={colour} opacity={0.7}
+                    style={{ cursor: "ew-resize" }}
+                    onMouseDown={e => { e.stopPropagation(); onPointerDown(e, i, "left"); }}
+                    onTouchStart={e => { e.stopPropagation(); onPointerDown(e, i, "left"); }}
+                  />
+                  {/* Right resize */}
+                  <rect x={x1+barW-HANDLE_W} y={y} width={HANDLE_W} height={barH} rx={2}
+                    fill={colour} opacity={0.7}
+                    style={{ cursor: "ew-resize" }}
+                    onMouseDown={e => { e.stopPropagation(); onPointerDown(e, i, "right"); }}
+                    onTouchStart={e => { e.stopPropagation(); onPointerDown(e, i, "right"); }}
+                  />
+                </>
+              )}
             </g>
           );
         })}
+
+        {/* Stage colour sidebar */}
         {(() => {
           const groups = []; let last = null, si = 0;
-          allTasks.forEach((t, i) => { if (t.stageKey !== last) { if (last) groups.push({ stageKey: last, si, ei: i-1 }); last = t.stageKey; si = i; } });
-          if (last) groups.push({ stageKey: last, si, ei: allTasks.length-1 });
-          return groups.map(g => {
-            const c = stageColour(g.stageKey);
-            return <rect key={g.stageKey} x={0} y={g.si*ROW_H+24} width={3} height={(g.ei-g.si+1)*ROW_H} fill={c} rx={1}/>;
-          });
+          displayTasks.forEach((t, i) => { if (t.stageKey !== last) { if (last) groups.push({ stageKey: last, si, ei: i-1 }); last = t.stageKey; si = i; } });
+          if (last) groups.push({ stageKey: last, si, ei: displayTasks.length-1 });
+          return groups.map(g => (
+            <rect key={g.stageKey} x={0} y={g.si*ROW_H+24} width={3} height={(g.ei-g.si+1)*ROW_H} fill={stageColour(g.stageKey)} rx={1} style={{ pointerEvents: "none" }} />
+          ));
         })()}
+
+        {/* Drag tooltip */}
+        {tooltip && (
+          <g style={{ pointerEvents: "none" }}>
+            <rect x={tooltip.x - 64} y={tooltip.y - 26} width={128} height={22} rx={5}
+              fill="#1F2533" opacity={0.92} />
+            <text x={tooltip.x} y={tooltip.y - 11}
+              textAnchor="middle" dominantBaseline="middle"
+              fill="white" fontSize={10} fontWeight={600}>
+              {fmtDate(tooltip.start)} → {fmtDate(tooltip.end)}
+            </text>
+          </g>
+        )}
       </svg>
+      {canEdit && (
+        <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6, paddingLeft: 4 }}>
+          Drag bars to move · drag edges to resize · changes ripple to dependent tasks
+        </p>
+      )}
     </div>
   );
 }
@@ -717,7 +910,15 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
       {/* ── GANTT ── */}
       {activeTab === "gantt" && (
         <Card style={{ padding: 20 }}>
-          <GanttChart stageTasks={engagement.stageTasks || {}} />
+          <GanttChart
+            stageTasks={engagement.stageTasks || {}}
+            canEdit={canEdit}
+            onUpdateTask={(stageKey, taskId, updates) => {
+              const tasks = engagement.stageTasks?.[stageKey] || [];
+              const idx = tasks.findIndex(t => t.id === taskId);
+              if (idx !== -1) updateTask(stageKey, idx, updates);
+            }}
+          />
         </Card>
       )}
 
