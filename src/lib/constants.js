@@ -170,15 +170,13 @@ export function rippleTasks(tasks) {
     const idealStart = workingDayAdd(prev.endDate, 1);
     if (out[i].startDate === idealStart) continue; // already correct
 
-    // Shift to ideal start (works for both forward and backward)
-    const duration = (out[i].startDate && out[i].endDate)
-      ? diffDays(out[i].startDate, out[i].endDate)
-      : 2;
-    out[i] = {
-      ...out[i],
-      startDate: idealStart,
-      endDate: workingDayAdd(idealStart, Math.max(duration, 1)),
-    };
+    // Preserve duration as raw milliseconds (calendar time) so weekends aren't doubled
+    const durMs = (out[i].startDate && out[i].endDate)
+      ? new Date(out[i].endDate).getTime() - new Date(out[i].startDate).getTime()
+      : 2 * 86400000;
+
+    const newEnd = new Date(new Date(idealStart).getTime() + durMs).toISOString().slice(0, 10);
+    out[i] = { ...out[i], startDate: idealStart, endDate: newEnd };
   }
   return out;
 }
