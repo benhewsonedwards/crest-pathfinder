@@ -86,6 +86,12 @@ function AppShell() {
     setPage("engagements");
   }
 
+  function handleSelectCustomer(customer) {
+    setSelectedCustomer(customer);
+    setSelectedEngagement(null);
+    setPage("customers");
+  }
+
   function handleOpenCustomer(customerId, customerName) {
     // Find customer by ID first, then fall back to name match
     const customer = customerId
