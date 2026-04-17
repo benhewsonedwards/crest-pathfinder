@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { doc, updateDoc, serverTimestamp, collection, addDoc, onSnapshot, query, orderBy } from "firebase/firestore";
+import { doc, updateDoc, deleteDoc, serverTimestamp, collection, addDoc, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -183,6 +183,8 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   const [activeStage, setActiveStage] = useState(engagement.currentStage);
   const [stageSubTab, setStageSubTab] = useState("tasks");
   const [saving, setSaving] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showLinkCustomer, setShowLinkCustomer] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
 
@@ -370,9 +372,25 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
           </p>
         </div>
         {canEdit && STAGE_KEYS.indexOf(engagement.currentStage) < STAGE_KEYS.length - 1 && (
-          <Btn variant="success" onClick={advanceStage}>
-            Advance → {STAGES[STAGE_KEYS.indexOf(engagement.currentStage) + 1]?.shortLabel}
-          </Btn>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="success" onClick={advanceStage}>
+              Advance → {STAGES[STAGE_KEYS.indexOf(engagement.currentStage) + 1]?.shortLabel}
+            </Btn>
+            <button
+              onClick={() => setShowDelete(true)}
+              style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "6px 12px", fontFamily: "inherit", transition: "all 0.13s" }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+            >Delete</button>
+          </div>
+        )}
+        {canEdit && STAGE_KEYS.indexOf(engagement.currentStage) === STAGE_KEYS.length - 1 && (
+          <button
+            onClick={() => setShowDelete(true)}
+            style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "6px 12px", fontFamily: "inherit", transition: "all 0.13s" }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+          >Delete</button>
         )}
       </div>
 
@@ -674,6 +692,31 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
           <ActivityLog engagementId={engagement.id} />
         </Card>
       )}
+
+      {/* Delete confirm */}
+      <Modal open={showDelete} onClose={() => setShowDelete(false)} title="Delete engagement" width={420}>
+        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
+          Are you sure you want to delete <strong>{engagement.customer}</strong>?
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          This will permanently remove all tasks, data capture, and activity history for this engagement. This cannot be undone.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setShowDelete(false)}>Cancel</Btn>
+          <Btn
+            disabled={deleting}
+            style={{ background: "var(--red)", color: "white" }}
+            onClick={async () => {
+              setDeleting(true);
+              await deleteDoc(doc(db, "engagements", engagement.id));
+              setDeleting(false);
+              onBack();
+            }}
+          >
+            {deleting ? "Deleting..." : "Delete engagement"}
+          </Btn>
+        </div>
+      </Modal>
     </div>
   );
 }

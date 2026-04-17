@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc, addDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { ROLES, JOB_FUNCTIONS } from "../lib/constants";
@@ -19,6 +19,9 @@ export default function TeamPage() {
   const [teams, setTeams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
+  const [deleteUser, setDeleteUser] = useState(null);
+  const [deleteTeam, setDeleteTeam] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [newTeamName, setNewTeamName] = useState("");
   const [addingTeam, setAddingTeam] = useState(false);
   const [activeTab, setActiveTab] = useState("members");
@@ -39,6 +42,30 @@ export default function TeamPage() {
 
   async function updateUser(uid, updates) {
     await updateDoc(doc(db, "users", uid), updates);
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteUser?.uid) return;
+    setDeleting(true);
+    // Remove from all teams first
+    for (const t of teams) {
+      if (t.members?.includes(deleteUser.uid)) {
+        await updateDoc(doc(db, "teams", t.id), {
+          members: t.members.filter(m => m !== deleteUser.uid),
+        });
+      }
+    }
+    await deleteDoc(doc(db, "users", deleteUser.uid));
+    setDeleteUser(null);
+    setDeleting(false);
+  }
+
+  async function handleDeleteTeam() {
+    if (!deleteTeam?.id) return;
+    setDeleting(true);
+    await deleteDoc(doc(db, "teams", deleteTeam.id));
+    setDeleteTeam(null);
+    setDeleting(false);
   }
 
   async function addTeam() {
@@ -83,14 +110,14 @@ export default function TeamPage() {
       {/* Members tab */}
       {activeTab === "members" && (
         <Card>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 80px", gap: 10, padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 100px", gap: 10, padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
             {["Member", "Function", "Role", "Team", ""].map(h => <Label key={h}>{h}</Label>)}
           </div>
           {users.length === 0 ? (
             <EmptyState icon="👥" title="No team members yet" description="Members will appear here once they sign in with their SafetyCulture Google account"/>
           ) : users.map((u, i) => (
             <div key={u.uid} style={{
-              display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 80px",
+              display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 100px",
               gap: 10, padding: "11px 18px", borderBottom: i < users.length-1 ? "1px solid var(--border)" : "none",
               alignItems: "center",
             }}>
@@ -107,7 +134,15 @@ export default function TeamPage() {
                 {teams.find(t => t.members?.includes(u.uid))?.name || "—"}
               </span>
               {isAdmin && (
-                <Btn size="sm" variant="ghost" onClick={() => setEditingUser(u)}>Edit</Btn>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <Btn size="sm" variant="ghost" onClick={() => setEditingUser(u)}>Edit</Btn>
+                  <button
+                    onClick={() => setDeleteUser(u)}
+                    style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "3px 8px", fontFamily: "inherit", transition: "all 0.13s" }}
+                    onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+                    onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                  >✕</button>
+                </div>
               )}
             </div>
           ))}
@@ -128,6 +163,14 @@ export default function TeamPage() {
                     <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>{team.name}</span>
                     <Pill color="grey" style={{ fontSize: 10 }}>{members.length} member{members.length !== 1 ? "s" : ""}</Pill>
                   </div>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setDeleteTeam(team)}
+                      style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "3px 10px", fontFamily: "inherit", transition: "all 0.13s" }}
+                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                    >Delete team</button>
+                  )}
                 </CardHeader>
                 <div style={{ padding: "12px 18px" }}>
                   {members.length === 0 ? (
@@ -210,6 +253,38 @@ export default function TeamPage() {
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
           <Btn variant="ghost" onClick={() => setAddingTeam(false)}>Cancel</Btn>
           <Btn onClick={addTeam} disabled={!newTeamName.trim()}>Create team</Btn>
+        </div>
+      </Modal>
+
+      {/* Delete user confirm */}
+      <Modal open={!!deleteUser} onClose={() => setDeleteUser(null)} title="Remove team member" width={420}>
+        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
+          Are you sure you want to remove <strong>{deleteUser?.displayName}</strong> from CREST Pathfinder?
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          This removes their profile and team membership. They will lose access immediately. They can rejoin by signing in again.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setDeleteUser(null)}>Cancel</Btn>
+          <Btn onClick={handleDeleteUser} disabled={deleting} style={{ background: "var(--red)", color: "white" }}>
+            {deleting ? "Removing..." : "Remove member"}
+          </Btn>
+        </div>
+      </Modal>
+
+      {/* Delete team confirm */}
+      <Modal open={!!deleteTeam} onClose={() => setDeleteTeam(null)} title="Delete team" width={420}>
+        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
+          Are you sure you want to delete the team <strong>{deleteTeam?.name}</strong>?
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          Members will not be deleted — they will simply have no team assigned.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setDeleteTeam(null)}>Cancel</Btn>
+          <Btn onClick={handleDeleteTeam} disabled={deleting} style={{ background: "var(--red)", color: "white" }}>
+            {deleting ? "Deleting..." : "Delete team"}
+          </Btn>
         </div>
       </Modal>
     </div>

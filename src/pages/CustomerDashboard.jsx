@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   collection, onSnapshot, query, where,
-  doc, updateDoc, serverTimestamp
+  doc, updateDoc, deleteDoc, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
@@ -203,6 +203,9 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
   const [tab, setTab] = useState("overview");
   const [showNewIntegration, setShowNewIntegration] = useState(false);
   const [editIntegration, setEditIntegration] = useState(null);
+  const [deleteIntegration, setDeleteIntegration] = useState(null);
+  const [showDeleteCustomer, setShowDeleteCustomer] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showShareable, setShowShareable] = useState(false);
 
   const canEdit = ["super_admin", "admin", "cse"].includes(profile?.role);
@@ -242,6 +245,22 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
   const latestEngagement = engagements.sort((a, b) =>
     STAGE_KEYS.indexOf(b.currentStage) - STAGE_KEYS.indexOf(a.currentStage)
   )[0];
+
+  async function handleDeleteIntegration() {
+    if (!deleteIntegration?.id) return;
+    setDeleting(true);
+    await deleteDoc(doc(db, "integrations", deleteIntegration.id));
+    setDeleteIntegration(null);
+    setDeleting(false);
+  }
+
+  async function handleDeleteCustomer() {
+    setDeleting(true);
+    await deleteDoc(doc(db, "customers", customer.id));
+    setDeleting(false);
+    setShowDeleteCustomer(false);
+    onBack();
+  }
 
   async function handlePublish() {
     const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${customer.id}`;
@@ -291,6 +310,15 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
           <Btn variant="ghost" onClick={() => setShowShareable(true)}>👁 Preview shareable view</Btn>
           {canEdit && onEditCustomer && (
             <Btn variant="ghost" onClick={() => onEditCustomer(customer)}>✎ Edit customer</Btn>
+          )}
+          {canEdit && (
+            <Btn
+              variant="ghost"
+              onClick={() => setShowDeleteCustomer(true)}
+              style={{ color: "var(--red)", borderColor: "var(--red)" }}
+            >
+              Delete
+            </Btn>
           )}
           {canEdit && <Btn onClick={() => setShowNewIntegration(true)}>+ New integration</Btn>}
         </div>
@@ -470,6 +498,14 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
                           </p>
                         </div>
                         <Btn size="sm" variant="ghost" onClick={() => setEditIntegration(i)}>View / Edit</Btn>
+                        {canEdit && (
+                          <button
+                            onClick={() => setDeleteIntegration(i)}
+                            style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "4px 10px", fontFamily: "inherit", transition: "all 0.13s" }}
+                            onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+                            onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                          >Delete</button>
+                        )}
                       </div>
 
                       {i.problemStatement && (
@@ -625,6 +661,38 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
           onPublish={handlePublish}
         />
       )}
+
+      {/* Delete integration confirm */}
+      <Modal open={!!deleteIntegration} onClose={() => setDeleteIntegration(null)} title="Delete integration" width={420}>
+        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
+          Are you sure you want to delete <strong>{deleteIntegration?.name}</strong>?
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          All scoping, design, operational details, tickets and version history will be permanently removed.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setDeleteIntegration(null)}>Cancel</Btn>
+          <Btn onClick={handleDeleteIntegration} disabled={deleting} style={{ background: "var(--red)", color: "white" }}>
+            {deleting ? "Deleting..." : "Delete integration"}
+          </Btn>
+        </div>
+      </Modal>
+
+      {/* Delete customer confirm */}
+      <Modal open={showDeleteCustomer} onClose={() => setShowDeleteCustomer(false)} title="Delete customer" width={420}>
+        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
+          Are you sure you want to delete <strong>{customer.name}</strong>?
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          This removes the customer record only. Linked engagements and integrations will not be deleted but will lose their customer association.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setShowDeleteCustomer(false)}>Cancel</Btn>
+          <Btn onClick={handleDeleteCustomer} disabled={deleting} style={{ background: "var(--red)", color: "white" }}>
+            {deleting ? "Deleting..." : "Delete customer"}
+          </Btn>
+        </div>
+      </Modal>
 
       <ToastContainer toasts={toasts} />
     </div>

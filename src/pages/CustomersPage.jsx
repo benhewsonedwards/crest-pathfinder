@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
   collection, onSnapshot, query, orderBy,
-  addDoc, doc, updateDoc, serverTimestamp
+  addDoc, doc, updateDoc, deleteDoc, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
@@ -51,6 +51,8 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const [form, setForm] = useState(BLANK_CUSTOMER);
   const [saving, setSaving] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
 
@@ -151,6 +153,14 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const totalIntegrations = integrations.length;
   const liveIntegrations = integrations.filter(i => i.status === "live" || i.status === "live-attention").length;
   const needsAttention = integrations.filter(i => i.status === "broken" || i.status === "live-attention").length;
+
+  async function handleDeleteCustomer() {
+    if (!deleteTarget?.id) return;
+    setDeleting(true);
+    await deleteDoc(doc(db, "customers", deleteTarget.id));
+    setDeleteTarget(null);
+    setDeleting(false);
+  }
 
   async function saveCustomer() {
     if (!form.name.trim()) return;
@@ -269,6 +279,16 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
                         Edit
                       </button>
                     )}
+                    {canEdit && (
+                      <button
+                        onClick={e => { e.stopPropagation(); setDeleteTarget(customer); }}
+                        style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "4px 10px", fontFamily: "inherit", transition: "all 0.13s" }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
+                      >
+                        Delete
+                      </button>
+                    )}
                     <span style={{ color: "var(--text-muted)", fontSize: 18 }}>›</span>
                   </div>
                 </div>
@@ -326,6 +346,26 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
           <Btn variant="ghost" onClick={closeModal}>Cancel</Btn>
           <Btn onClick={saveCustomer} disabled={saving || !form.name.trim()}>
             {saving ? "Saving..." : editTarget ? "Save changes" : "Create customer"}
+          </Btn>
+        </div>
+      </Modal>
+
+      {/* Delete confirm modal */}
+      <Modal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} title="Delete customer" width={420}>
+        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
+          Are you sure you want to delete <strong>{deleteTarget?.name}</strong>?
+        </p>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
+          This removes the customer record only. Linked engagements and integrations will not be deleted, but will lose their customer link.
+        </p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+          <Btn variant="ghost" onClick={() => setDeleteTarget(null)}>Cancel</Btn>
+          <Btn
+            onClick={handleDeleteCustomer}
+            disabled={deleting}
+            style={{ background: "var(--red)", color: "white" }}
+          >
+            {deleting ? "Deleting..." : "Delete customer"}
           </Btn>
         </div>
       </Modal>
