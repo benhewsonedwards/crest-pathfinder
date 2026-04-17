@@ -52,17 +52,36 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
 
   useEffect(() => {
-    const u1 = onSnapshot(query(collection(db, "customers"), orderBy("name")), s => {
-      setCustomers(s.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
-    });
+    // Set a fallback timeout so we never get stuck on spinner
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
+    const u1 = onSnapshot(
+      query(collection(db, "customers"), orderBy("name")),
+      s => {
+        setCustomers(s.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+        clearTimeout(timeout);
+      },
+      err => {
+        // orderBy("name") fails if index doesn't exist or collection is empty
+        // Fall back to unordered query
+        console.error("customers orderBy failed, falling back:", err.code);
+        const u1b = onSnapshot(collection(db, "customers"), s => {
+          setCustomers(s.docs.map(d => ({ id: d.id, ...d.data() })
+          ).sort((a, b) => (a.name || "").localeCompare(b.name || "")));
+          setLoading(false);
+          clearTimeout(timeout);
+        }, () => { setLoading(false); clearTimeout(timeout); });
+        return u1b;
+      }
+    );
     const u2 = onSnapshot(collection(db, "integrations"), s => {
       setIntegrations(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, () => {});
     const u3 = onSnapshot(collection(db, "engagements"), s => {
       setEngagements(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => { u1(); u2(); u3(); };
+    }, () => {});
+    return () => { clearTimeout(timeout); u1(); u2(); u3(); };
   }, []);
 
   function integrationsFor(customerId) {
