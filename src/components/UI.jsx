@@ -275,7 +275,56 @@ styleEl.textContent = `
 `;
 document.head.appendChild(styleEl);
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
+// ─── Sorting ──────────────────────────────────────────────────────────────────
+export function useSortable(defaultKey, defaultDir = "asc") {
+  const [sortKey, setSortKey] = _useState(defaultKey);
+  const [sortDir, setSortDir] = _useState(defaultDir);
+
+  function toggle(key) {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  }
+
+  function sort(arr, getValue) {
+    return [...arr].sort((a, b) => {
+      const av = getValue ? getValue(a, sortKey) : a[sortKey];
+      const bv = getValue ? getValue(b, sortKey) : b[sortKey];
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = typeof av === "string"
+        ? av.localeCompare(bv, undefined, { sensitivity: "base" })
+        : av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }
+
+  return { sortKey, sortDir, toggle, sort };
+}
+
+export function SortableHeader({ label, sortKey: key, currentKey, dir, onToggle, style, align = "left" }) {
+  const active = currentKey === key;
+  return (
+    <button
+      onClick={() => onToggle(key)}
+      style={{
+        background: "none", border: "none", cursor: "pointer", padding: 0,
+        fontFamily: "inherit", letterSpacing: "0.08em", textTransform: "uppercase",
+        fontSize: 10, fontWeight: 600,
+        color: active ? "var(--purple)" : "var(--text-muted)",
+        display: "flex", alignItems: "center", gap: 3,
+        justifyContent: align === "right" ? "flex-end" : "flex-start",
+        width: "100%", ...style,
+      }}
+    >
+      {label}
+      <span style={{ fontSize: 9, opacity: active ? 1 : 0.35 }}>
+        {active ? (dir === "asc" ? "▲" : "▼") : "▲"}
+      </span>
+    </button>
+  );
+}
+
 import { useState as _useState, useCallback as _useCallback, useRef as _useRef, useEffect as _useEffect } from "react";
 
 export function useToast() {

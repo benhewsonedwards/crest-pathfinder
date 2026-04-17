@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, fmtDate, timeAgo } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, EmptyState, Btn, Spinner } from "../components/UI";
+import { Card, CardHeader, Label, Pill, Avatar, EmptyState, Btn, Spinner, useSortable, SortableHeader } from "../components/UI";
 
 function StatCard({ label, value, colour, icon }) {
   return (
@@ -63,6 +63,20 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
   const [loading, setLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState(null);
   const [ragFilter, setRagFilter] = useState(null);
+  const { sortKey, sortDir, toggle, sort } = useSortable("updatedAt", "desc");
+
+  function getSortValue(e, key) {
+    switch (key) {
+      case "customer":  return e.customer?.toLowerCase() || "";
+      case "stage":     return STAGE_KEYS.indexOf(e.currentStage);
+      case "tshirt":    return ["XS","S","Standard","L","XL"].indexOf(e.tshirt);
+      case "region":    return e.region || "";
+      case "arr":       return Number(e.arr) || 0;
+      case "ragStatus": return ["green","amber","red"].indexOf(e.ragStatus);
+      case "updatedAt": return e.updatedAt?.toMillis ? e.updatedAt.toMillis() : new Date(e.updatedAt||0).getTime();
+      default:          return "";
+    }
+  }
 
   useEffect(() => {
     const q = query(collection(db, "engagements"), orderBy("createdAt", "desc"));
@@ -137,9 +151,13 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
       <Card>
         {/* Headers */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 80px 80px 80px 70px 80px", gap: 10, padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-          {["Customer", "Stage", "Size", "Region", "ARR", "RAG", "Updated"].map(h => (
-            <Label key={h}>{h}</Label>
-          ))}
+          <SortableHeader label="Customer" sortKey="customer"  currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Stage"    sortKey="stage"     currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Size"     sortKey="tshirt"    currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Region"   sortKey="region"    currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="ARR"      sortKey="arr"       currentKey={sortKey} dir={sortDir} onToggle={toggle} align="right" />
+          <SortableHeader label="RAG"      sortKey="ragStatus" currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Updated"  sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onToggle={toggle} />
         </div>
 
         {filtered.length === 0 ? (
@@ -149,7 +167,7 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
             action={<Btn onClick={onNewEngagement}>+ New engagement</Btn>}
           />
         ) : (
-          filtered.map((e, i) => {
+          sort(filtered, getSortValue).map((e, i, arr) => {
             const stage = STAGES.find(s => s.key === e.currentStage);
             const rag = RAG_STATUSES.find(r => r.key === e.ragStatus) || RAG_STATUSES[0];
             const allTasks = STAGE_KEYS.flatMap(sk => e.stageTasks?.[sk] || []);
@@ -158,7 +176,7 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
             return (
               <div key={e.id} onClick={() => onSelectEngagement(e)} style={{
                 display: "grid", gridTemplateColumns: "1fr 110px 80px 80px 80px 70px 80px",
-                gap: 10, padding: "11px 18px", borderBottom: i < filtered.length - 1 ? "1px solid var(--border)" : "none",
+                gap: 10, padding: "11px 18px", borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
                 cursor: "pointer", transition: "background 0.1s", alignItems: "center",
               }}
               onMouseEnter={e2 => e2.currentTarget.style.background = "var(--surface2)"}

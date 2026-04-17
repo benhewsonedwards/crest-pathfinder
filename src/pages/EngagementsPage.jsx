@@ -3,7 +3,7 @@ import { collection, onSnapshot, query, orderBy, doc, deleteDoc } from "firebase
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, REGIONS, SEGMENTS, fmtDate, timeAgo } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, Btn, Input, Select, Spinner, EmptyState, Modal } from "../components/UI";
+import { Card, CardHeader, Label, Pill, Avatar, Btn, Input, Select, Spinner, EmptyState, Modal, useSortable, SortableHeader } from "../components/UI";
 import EngagementModal from "../components/EngagementModal";
 
 export default function EngagementsPage({ onSelectEngagement, onNewEngagement, users, customers = [] }) {
@@ -19,6 +19,7 @@ export default function EngagementsPage({ onSelectEngagement, onNewEngagement, u
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
   const canDelete = ["super_admin", "admin"].includes(profile?.role);
+  const { sortKey, sortDir, toggle, sort } = useSortable("updatedAt", "desc");
 
   useEffect(() => {
     const q = query(collection(db, "engagements"), orderBy("updatedAt", "desc"));
@@ -36,6 +37,21 @@ export default function EngagementsPage({ onSelectEngagement, onNewEngagement, u
     if (ragFilter && e.ragStatus !== ragFilter) return false;
     return true;
   });
+
+  function getSortValue(e, key) {
+    switch (key) {
+      case "customer":  return e.customer?.toLowerCase() || "";
+      case "stage":     return STAGE_KEYS.indexOf(e.currentStage);
+      case "region":    return e.region || "";
+      case "tshirt":    return ["XS","S","Standard","L","XL"].indexOf(e.tshirt);
+      case "arr":       return Number(e.arr) || 0;
+      case "ragStatus": return ["green","amber","red"].indexOf(e.ragStatus);
+      case "updatedAt": return e.updatedAt?.toMillis ? e.updatedAt.toMillis() : new Date(e.updatedAt || 0).getTime();
+      default:          return "";
+    }
+  }
+
+  const sorted = sort(filtered, getSortValue);
 
   async function handleDelete() {
     if (!deleteTarget) return;
@@ -88,12 +104,19 @@ export default function EngagementsPage({ onSelectEngagement, onNewEngagement, u
       {/* Table */}
       <Card>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 110px 90px 80px 90px 70px 80px 72px", gap: 8, padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-          {["Customer", "Stage", "Region", "Size", "ARR", "RAG", "Updated", ""].map(h => <Label key={h}>{h}</Label>)}
+          <SortableHeader label="Customer"  sortKey="customer"  currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Stage"     sortKey="stage"     currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Region"    sortKey="region"    currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Size"      sortKey="tshirt"    currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="ARR"       sortKey="arr"       currentKey={sortKey} dir={sortDir} onToggle={toggle} align="right" />
+          <SortableHeader label="RAG"       sortKey="ragStatus" currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <SortableHeader label="Updated"   sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+          <Label></Label>
         </div>
 
-        {filtered.length === 0 ? (
+        {sorted.length === 0 ? (
           <EmptyState icon="📋" title="No engagements found" description={search || stageFilter || regionFilter || ragFilter ? "Try adjusting your filters" : "Create your first engagement to get started"} action={!search && canEdit && <Btn onClick={onNewEngagement}>+ New engagement</Btn>}/>
-        ) : filtered.map((e, i) => {
+        ) : sorted.map((e, i) => {
           const stage = STAGES.find(s => s.key === e.currentStage);
           const rag = RAG_STATUSES.find(r => r.key === e.ragStatus) || RAG_STATUSES[0];
           const allTasks = STAGE_KEYS.flatMap(sk => e.stageTasks?.[sk] || []);
@@ -102,7 +125,7 @@ export default function EngagementsPage({ onSelectEngagement, onNewEngagement, u
           return (
             <div key={e.id} style={{
               display: "grid", gridTemplateColumns: "1fr 110px 90px 80px 90px 70px 80px 72px",
-              gap: 8, padding: "11px 18px", borderBottom: i < filtered.length-1 ? "1px solid var(--border)" : "none",
+              gap: 8, padding: "11px 18px", borderBottom: i < sorted.length-1 ? "1px solid var(--border)" : "none",
               alignItems: "center", transition: "background 0.1s",
             }}
             onMouseEnter={ev => ev.currentTarget.style.background = "var(--surface2)"}

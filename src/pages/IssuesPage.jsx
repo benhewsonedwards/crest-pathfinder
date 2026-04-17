@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, fmtDate } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, Btn, Spinner, EmptyState } from "../components/UI";
+import { Card, CardHeader, Label, Pill, Avatar, Btn, Spinner, EmptyState, useSortable, SortableHeader } from "../components/UI";
 
 function getIssueFlags(engagement) {
   const today = new Date();
@@ -24,6 +24,17 @@ function getIssueFlags(engagement) {
 export default function IssuesPage({ onSelectEngagement }) {
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
+  const { sortKey, sortDir, toggle, sort } = useSortable("updatedAt", "desc");
+
+  function getIssueSortValue(e, key) {
+    switch (key) {
+      case "customer":  return e.customer?.toLowerCase() || "";
+      case "stage":     return STAGE_KEYS.indexOf(e.currentStage);
+      case "ragStatus": return ["green","amber","red"].indexOf(e.ragStatus);
+      case "updatedAt": return e.updatedAt?.toMillis ? e.updatedAt.toMillis() : new Date(e.updatedAt||0).getTime();
+      default:          return "";
+    }
+  }
 
   useEffect(() => {
     const q = query(collection(db, "engagements"), orderBy("updatedAt", "asc"));
@@ -73,9 +84,13 @@ export default function IssuesPage({ onSelectEngagement }) {
               </div>
               {/* Column headers */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 80px 80px 80px", gap: 10, padding: "7px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-                {["Customer", "Stage", "CSE", "RAG", "Last update"].map(h => <Label key={h}>{h}</Label>)}
+                <SortableHeader label="Customer"    sortKey="customer"  currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+                <SortableHeader label="Stage"       sortKey="stage"     currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+                <Label>CSE</Label>
+                <SortableHeader label="RAG"         sortKey="ragStatus" currentKey={sortKey} dir={sortDir} onToggle={toggle} />
+                <SortableHeader label="Last update" sortKey="updatedAt" currentKey={sortKey} dir={sortDir} onToggle={toggle} />
               </div>
-              {cat.items.map((e, i) => {
+              {sort(cat.items, getIssueSortValue).map((e, i, arr) => {
                 const stage = STAGES.find(s => s.key === e.currentStage);
                 const rag = RAG_STATUSES.find(r => r.key === e.ragStatus) || RAG_STATUSES[0];
                 const updated = e.updatedAt?.toDate ? e.updatedAt.toDate() : null;
@@ -83,7 +98,7 @@ export default function IssuesPage({ onSelectEngagement }) {
                 return (
                   <div key={e.id} onClick={() => onSelectEngagement(e)} style={{
                     display: "grid", gridTemplateColumns: "1fr 100px 80px 80px 80px",
-                    gap: 10, padding: "10px 18px", borderBottom: i<cat.items.length-1?"1px solid var(--border)":"none",
+                    gap: 10, padding: "10px 18px", borderBottom: i<arr.length-1?"1px solid var(--border)":"none",
                     cursor: "pointer", alignItems: "center",
                   }}
                   onMouseEnter={el => el.currentTarget.style.background = "var(--surface2)"}

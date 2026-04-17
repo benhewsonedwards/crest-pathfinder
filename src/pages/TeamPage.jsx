@@ -3,7 +3,7 @@ import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimest
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { ROLES, JOB_FUNCTIONS } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, Btn, Select, Input, Modal, FieldGroup, Spinner, EmptyState } from "../components/UI";
+import { Card, CardHeader, Label, Pill, Avatar, Btn, Select, Input, Modal, FieldGroup, Spinner, EmptyState, useSortable, SortableHeader } from "../components/UI";
 
 function RolePill({ role }) {
   const colours = {
@@ -28,6 +28,7 @@ export default function TeamPage() {
 
   const isSuperAdmin = profile?.role === "super_admin";
   const isAdmin = ["super_admin", "admin"].includes(profile?.role);
+  const { sortKey: uSortKey, sortDir: uSortDir, toggle: uToggle, sort: uSort } = useSortable("displayName");
 
   useEffect(() => {
     const unsub1 = onSnapshot(collection(db, "users"), snap => {
@@ -111,14 +112,21 @@ export default function TeamPage() {
       {activeTab === "members" && (
         <Card>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 100px", gap: 10, padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-            {["Member", "Function", "Role", "Team", ""].map(h => <Label key={h}>{h}</Label>)}
+            <SortableHeader label="Member"   sortKey="displayName"   currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
+            <SortableHeader label="Function" sortKey="jobFunction"   currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
+            <SortableHeader label="Role"     sortKey="role"          currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
+            <SortableHeader label="Team"     sortKey="team"          currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
+            <Label></Label>
           </div>
           {users.length === 0 ? (
             <EmptyState icon="👥" title="No team members yet" description="Members will appear here once they sign in with their SafetyCulture Google account"/>
-          ) : users.map((u, i) => (
+          ) : uSort(users, (u, key) => {
+              if (key === "team") return teams.find(t => t.members?.includes(u.uid))?.name || "";
+              return (u[key] || "").toLowerCase();
+            }).map((u, i, arr) => (
             <div key={u.uid} style={{
               display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 100px",
-              gap: 10, padding: "11px 18px", borderBottom: i < users.length-1 ? "1px solid var(--border)" : "none",
+              gap: 10, padding: "11px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--border)" : "none",
               alignItems: "center",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

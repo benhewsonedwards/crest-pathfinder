@@ -9,7 +9,8 @@ import { REGIONS, SEGMENTS, SUBSCRIPTIONS, CURRENCIES } from "../lib/constants";
 import { integrationStatus } from "../lib/integrationConstants";
 import {
   Card, CardHeader, Label, Pill, Avatar, Btn,
-  Input, Select, Modal, FieldGroup, Spinner, EmptyState
+  Input, Select, Modal, FieldGroup, Spinner, EmptyState,
+  useSortable, SortableHeader
 } from "../components/UI";
 
 const INDUSTRIES = [
@@ -55,6 +56,19 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const [deleting, setDeleting] = useState(false);
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
+  const { sortKey, sortDir, toggle, sort } = useSortable("name");
+
+  function getCustomerSortValue(c, key) {
+    switch (key) {
+      case "name":         return c.name?.toLowerCase() || "";
+      case "segment":      return c.segment?.toLowerCase() || "";
+      case "region":       return c.region?.toLowerCase() || "";
+      case "arr":          return Number(c.arr) || 0;
+      case "integrations": return integrationsFor(c.id).length;
+      case "engagements":  return engagementsFor(c.id).length;
+      default:             return "";
+    }
+  }
 
   function openCreate() {
     setForm(BLANK_CUSTOMER);
@@ -203,8 +217,8 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
         <StatBubble label="Needs attention" value={needsAttention} colour={needsAttention > 0 ? "var(--red)" : "var(--green)"} />
       </div>
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+      {/* Filters + sort */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
         <div style={{ position: "relative", flex: 1 }}>
           <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 13 }}>🔍</span>
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customers..." style={{ paddingLeft: 30 }} />
@@ -218,13 +232,42 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
         )}
       </div>
 
+      {/* Sort bar */}
+      <div style={{ display: "flex", gap: 4, padding: "6px 12px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", marginBottom: 12, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--text-muted)", letterSpacing: "0.07em", textTransform: "uppercase", alignSelf: "center", marginRight: 6 }}>Sort:</span>
+        {[
+          { key: "name",         label: "Name" },
+          { key: "segment",      label: "Segment" },
+          { key: "region",       label: "Region" },
+          { key: "arr",          label: "ARR" },
+          { key: "integrations", label: "Integrations" },
+          { key: "engagements",  label: "Engagements" },
+        ].map(({ key, label }) => {
+          const active = sortKey === key;
+          return (
+            <button key={key} onClick={() => toggle(key)} style={{
+              background: active ? "var(--purple-light)" : "none",
+              border: `1px solid ${active ? "var(--purple)" : "transparent"}`,
+              borderRadius: "var(--radius-sm)", padding: "3px 10px",
+              cursor: "pointer", fontFamily: "inherit", fontSize: 11,
+              color: active ? "var(--purple)" : "var(--text-second)",
+              fontWeight: active ? 600 : 400, display: "flex", alignItems: "center", gap: 3,
+              transition: "all 0.13s",
+            }}>
+              {label}
+              {active && <span style={{ fontSize: 9 }}>{sortDir === "asc" ? "▲" : "▼"}</span>}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Customer list */}
       {filtered.length === 0 ? (
         <EmptyState icon="🏢" title="No customers yet" description="Add your first customer to start tracking their engagement and integration history"
           action={canEdit && <Btn onClick={openCreate}>+ New customer</Btn>} />
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {filtered.map(customer => {
+          {sort(filtered, getCustomerSortValue).map(customer => {
             const ints = integrationsFor(customer.id);
             const engs = engagementsFor(customer.id);
             const openTickets = openTicketsFor(customer.id);
