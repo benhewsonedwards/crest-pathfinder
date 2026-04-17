@@ -90,11 +90,17 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
     if (!svgRef.current) return 0;
     const rect = svgRef.current.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    // Use frozen SVG_W from layout, not current DOM width, for consistent coords
-    return (clientX - rect.left) * (SVG_W / rect.width);
+    // clientX - rect.left gives the pixel position within the SVG's visible area.
+    // Since the SVG has a fixed pixel width (SVG_W) but is inside a scrollable div,
+    // we need to add the scroll offset of the parent container to get the true SVG-space x.
+    const scrollLeft = svgRef.current.parentElement?.scrollLeft || 0;
+    return (clientX - rect.left) + scrollLeft;
   }
 
-  // ── Drag handlers — created once, always read from S.current ──────────────
+  // Store getSvgX in S.current so onMove (created once) always uses the current impl
+  S.current.getSvgX = getSvgX;
+
+  // ── Drag handlers — created once, read everything from S.current ──────────
   if (!S.current.handlersAttached) {
     S.current.handlersAttached = true;
 
@@ -103,20 +109,20 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
       if (!drag) return;
       if (e.cancelable) e.preventDefault();
 
-      const currentX = getSvgX(e);
-      const { mode, anchorX, anchorIso, origStart, origEnd, origDurDays } = drag;
+      const currentX = S.current.getSvgX(e);
+      const { mode, anchorX, origStart, origEnd } = drag;
 
-      // Compute date delta from the frozen anchor point
-      const anchorDate  = new Date(anchorIso);
-      const currentDate = new Date(xToWorkingIso(currentX));
-      const deltaDays   = Math.round((currentDate - anchorDate) / 86400000);
+      // Raw pixel delta from the anchor point, converted to whole days
+      const pxDelta   = currentX - anchorX;
+      const daysDelta = Math.round(pxDelta / S.current.layout.PX_PER_DAY);
 
-      // Apply delta to original dates
       function shiftDate(iso, d) {
+        if (!iso) return iso;
         const nd = new Date(iso);
         nd.setDate(nd.getDate() + d);
-        if (nd.getDay() === 6) nd.setDate(nd.getDate() - 1);
-        if (nd.getDay() === 0) nd.setDate(nd.getDate() + 1);
+        // Weekend snap
+        if (nd.getDay() === 6) nd.setDate(nd.getDate() + (d >= 0 ? 2 : -1));
+        if (nd.getDay() === 0) nd.setDate(nd.getDate() + (d >= 0 ? 1 : -2));
         return nd.toISOString().slice(0, 10);
       }
 
@@ -124,14 +130,14 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
       const t = next[drag.taskIdx];
 
       if (mode === "move") {
-        t.startDate = shiftDate(origStart, deltaDays);
-        t.endDate   = shiftDate(origEnd,   deltaDays);
+        t.startDate = shiftDate(origStart, daysDelta);
+        t.endDate   = shiftDate(origEnd,   daysDelta);
       } else if (mode === "left") {
-        const ns = shiftDate(origStart, deltaDays);
-        if (ns < t.endDate) t.startDate = ns;
-      } else { // right
-        const ne = shiftDate(origEnd, deltaDays);
-        if (ne > t.startDate) t.endDate = ne;
+        const ns = shiftDate(origStart, daysDelta);
+        if (ns < origEnd) t.startDate = ns;
+      } else {
+        const ne = shiftDate(origEnd, daysDelta);
+        if (ne > origStart) t.endDate = ne;
       }
 
       S.current.localTasks = next;
@@ -205,14 +211,13 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
     e.stopPropagation();
 
     // Snapshot starting position — all deltas computed from this, never accumulated
-    const svgX = getSvgX(e);
+    const svgX = S.current.getSvgX(e);
     S.current.drag = {
       taskIdx,
       mode,
-      anchorX:    svgX,
-      anchorIso:  xToWorkingIso(svgX),  // freeze the date at the click point
-      origStart:  t.startDate,
-      origEnd:    t.endDate,
+      anchorX:   svgX,
+      origStart: t.startDate,
+      origEnd:   t.endDate,
     };
     S.current.dragging    = true;
     S.current.localTasks  = S.current.propTasks.map(x => ({ ...x }));
