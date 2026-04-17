@@ -95,31 +95,38 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   function updateBarDOM(taskIdx, newStart, newEnd) {
     const svg = svgRef.current;
     if (!svg) return;
-    const L = S.current.layout;
-    const x1   = LABEL_W + (new Date(newStart).getTime() - L.minMs) * L.PX_PER_MS;
-    const x2   = LABEL_W + (new Date(newEnd).getTime()   - L.minMs) * L.PX_PER_MS;
+    const L    = S.current.layout;
+    const x1   = L.LABEL_W + (new Date(newStart).getTime() - L.minMs) * L.PX_PER_MS;
+    const x2   = L.LABEL_W + (new Date(newEnd).getTime()   - L.minMs) * L.PX_PER_MS;
     const barW = Math.max(x2 - x1, 4);
     const hW   = Math.min(L.HANDLE_W, Math.floor(barW / 2));
 
-    const bar     = svg.querySelector(`[data-bar="${taskIdx}"]`);
-    const shadow  = svg.querySelector(`[data-shadow="${taskIdx}"]`);
-    const lHandle = svg.querySelector(`[data-lhandle="${taskIdx}"]`);
-    const rHandle = svg.querySelector(`[data-rhandle="${taskIdx}"]`);
-    const tip     = svg.querySelector(`[data-tooltip]`);
+    // All bar elements are children of a <g id="task-group-{i}">
+    const g = svg.getElementById(`task-group-${taskIdx}`);
+    if (!g) return;
 
-    if (bar)     { bar.setAttribute("x", x1); bar.setAttribute("width", barW); }
-    if (shadow)  { shadow.setAttribute("x", x1+2); shadow.setAttribute("width", barW); }
-    if (lHandle) { lHandle.setAttribute("x", x1); lHandle.setAttribute("width", hW); }
-    if (rHandle) { rHandle.setAttribute("x", x1+barW-hW); rHandle.setAttribute("width", hW); }
+    // Update each named element within the group
+    const byRole = role => g.querySelector(`[data-role="${role}"]`);
+    const bar     = byRole("bar");
+    const shadow  = byRole("shadow");
+    const accent  = byRole("accent");
+    const lHandle = byRole("lhandle");
+    const rHandle = byRole("rhandle");
+    const tip     = svg.getElementById("gantt-tooltip");
+
+    if (bar)    { bar.setAttribute("x",    x1);        bar.setAttribute("width",    barW); }
+    if (shadow) { shadow.setAttribute("x", x1+2);      shadow.setAttribute("width", barW); }
+    if (accent) { accent.setAttribute("x", x1); }
+    if (lHandle){ lHandle.setAttribute("x", x1);       lHandle.setAttribute("width", hW); }
+    if (rHandle){ rHandle.setAttribute("x", x1+barW-hW); rHandle.setAttribute("width", hW); }
 
     if (tip) {
-      const cx = Math.min(Math.max((x1+x2)/2, LABEL_W+68), L.SVG_W-68);
+      const cx = Math.min(Math.max((x1+x2)/2, L.LABEL_W+68), L.SVG_W-68);
       const tipBg   = tip.querySelector("rect");
       const tipText = tip.querySelector("text");
-      if (tipBg)   tipBg.setAttribute("x", cx-64);
-      if (tipText) { tipText.setAttribute("x", cx); tipText.textContent = `${fmtDate(newStart)} → ${fmtDate(newEnd)}`; }
-      // Show tooltip
-      tip.style.display = "";
+      if (tipBg)  { tipBg.setAttribute("x",  cx-64); }
+      if (tipText){ tipText.setAttribute("x", cx);  tipText.textContent = `${fmtDate(newStart)} → ${fmtDate(newEnd)}`; }
+      tip.removeAttribute("style"); // make visible
     }
   }
 
@@ -171,13 +178,14 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
       // Hide tooltip
       const svg = svgRef.current;
       if (svg) {
-        const tip = svg.querySelector("[data-tooltip]");
+        const tip = svg.getElementById("gantt-tooltip");
         if (tip) tip.style.display = "none";
-        // Reset active bar fill
         const drag = S.current.drag;
         if (drag) {
-          const bar = svg.querySelector(`[data-bar="${drag.taskIdx}"]`);
-          if (bar) bar.setAttribute("fill", S.current.propTasks[drag.taskIdx] ? stageColour(S.current.propTasks[drag.taskIdx].stageKey) + "70" : "");
+          const g = svg.getElementById(`task-group-${drag.taskIdx}`);
+          const bar = g?.querySelector("[data-role='bar']");
+          const t = S.current.propTasks[drag.taskIdx];
+          if (bar && t) bar.setAttribute("fill", stageColour(t.stageKey) + "70");
         }
       }
 
@@ -226,7 +234,8 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
     // Visually mark as active
     const svg = svgRef.current;
     if (svg) {
-      const bar = svg.querySelector(`[data-bar="${taskIdx}"]`);
+      const g = svg.getElementById(`task-group-${taskIdx}`);
+      const bar = g?.querySelector("[data-role='bar']");
       if (bar) bar.setAttribute("fill", stageColour(t.stageKey) + "BB");
     }
 
@@ -308,19 +317,20 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
           const hW      = Math.min(HANDLE_W, Math.floor(barW / 2));
 
           return (
-            <g key={t.id || i}>
+            <g key={t.id || i} id={`task-group-${i}`}>
+              {/* Task label */}
               <text x={LABEL_W-8} y={y+barH/2+4}
                 fill={t.done ? "#9CA3AF" : "#374151"} fontSize={10}
                 textAnchor="end" dominantBaseline="middle">
                 {t.title.length > 24 ? t.title.slice(0,22)+"…" : t.title}
               </text>
 
-              {/* Shadow — shown during drag via data-shadow attr */}
-              <rect data-shadow={i} x={x1+2} y={y+2} width={barW} height={barH} rx={3}
+              {/* Shadow — initially hidden, shown via DOM during drag */}
+              <rect data-role="shadow" x={x1+2} y={y+2} width={barW} height={barH} rx={3}
                 fill="rgba(0,0,0,0.12)" style={{ pointerEvents:"none", display:"none" }}/>
 
-              {/* Bar */}
-              <rect data-bar={i} x={x1} y={y} width={barW} height={barH} rx={3}
+              {/* Bar body */}
+              <rect data-role="bar" x={x1} y={y} width={barW} height={barH} rx={3}
                 fill={t.done ? colour+"28" : t.locked ? colour+"44" : colour+"70"}
                 stroke={t.locked ? colour : "none"} strokeWidth={t.locked ? 1.5 : 0}
                 strokeDasharray={t.locked ? "5 2" : "none"}
@@ -329,8 +339,9 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
                 onTouchStart={ev => onPointerDown(ev, i, "move")}
               />
 
-              <rect x={x1} y={y} width={3} height={barH} rx={1} fill={colour}
-                style={{ pointerEvents:"none" }}/>
+              {/* Left colour accent */}
+              <rect data-role="accent" x={x1} y={y} width={3} height={barH} rx={1}
+                fill={colour} style={{ pointerEvents:"none" }}/>
 
               {t.done && (
                 <text x={x1+barW/2} y={y+barH/2+1} textAnchor="middle"
@@ -343,14 +354,15 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
                   style={{ pointerEvents:"none" }}>🔒</text>
               )}
 
+              {/* Resize handles — always present for movable tasks */}
               {movable && (
                 <>
-                  <rect data-lhandle={i} x={x1} y={y} width={hW} height={barH} rx={2}
+                  <rect data-role="lhandle" x={x1} y={y} width={hW} height={barH} rx={2}
                     fill={colour} opacity={0.9} style={{ cursor:"ew-resize" }}
                     onMouseDown={ev => { ev.stopPropagation(); onPointerDown(ev, i, "left"); }}
                     onTouchStart={ev => { ev.stopPropagation(); onPointerDown(ev, i, "left"); }}
                   />
-                  <rect data-rhandle={i} x={x1+barW-hW} y={y} width={hW} height={barH} rx={2}
+                  <rect data-role="rhandle" x={x1+barW-hW} y={y} width={hW} height={barH} rx={2}
                     fill={colour} opacity={0.9} style={{ cursor:"ew-resize" }}
                     onMouseDown={ev => { ev.stopPropagation(); onPointerDown(ev, i, "right"); }}
                     onTouchStart={ev => { ev.stopPropagation(); onPointerDown(ev, i, "right"); }}
@@ -368,8 +380,8 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
             style={{ pointerEvents:"none" }}/>
         ))}
 
-        {/* Tooltip — hidden until drag, updated directly via DOM */}
-        <g data-tooltip style={{ pointerEvents:"none", display:"none" }}>
+        {/* Tooltip — hidden until drag, updated via DOM */}
+        <g id="gantt-tooltip" style={{ pointerEvents:"none", display:"none" }}>
           <rect x={0} y={0} width={128} height={18} rx={4} fill="#111827" opacity={0.9}/>
           <text x={64} y={11} textAnchor="middle" dominantBaseline="middle"
             fill="white" fontSize={10} fontWeight={600}>—</text>
