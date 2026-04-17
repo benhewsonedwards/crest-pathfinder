@@ -44,9 +44,6 @@ export default function Sidebar({ active, onChange }) {
       {/* Nav */}
       <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
         {NAV_ITEMS.map(item => {
-          // Hide team/settings from non-admins
-          if ((item.id === "team" || item.id === "settings") &&
-              !["super_admin", "admin"].includes(profile?.role)) return null;
           const isActive = active === item.id;
           return (
             <button key={item.id} onClick={() => onChange(item.id)} style={{

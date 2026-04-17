@@ -10,6 +10,7 @@ import TeamPage from "./pages/TeamPage";
 import IssuesPage from "./pages/IssuesPage";
 import CustomersPage from "./pages/CustomersPage";
 import CustomerDashboard from "./pages/CustomerDashboard";
+import SharePage from "./pages/SharePage";
 import Sidebar from "./components/Sidebar";
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
@@ -85,10 +86,18 @@ function AppShell() {
     setPage("engagements");
   }
 
-  function handleSelectCustomer(customer) {
-    setSelectedCustomer(customer);
-    setSelectedEngagement(null);
-    setPage("customers");
+  function handleOpenCustomer(customerId, customerName) {
+    // Find customer by ID first, then fall back to name match
+    const customer = customerId
+      ? customers.find(c => c.id === customerId)
+      : customers.find(c => c.name === customerName);
+    if (customer) {
+      handleSelectCustomer(customer);
+    } else if (customerName) {
+      // Customer exists as engagement only — navigate to customers page filtered
+      setPage("customers");
+      setSelectedEngagement(null);
+    }
   }
 
   function handleNav(p) {
@@ -110,6 +119,7 @@ function AppShell() {
             engagement={selectedEngagement}
             onBack={() => { setSelectedEngagement(null); setPage("pipeline"); }}
             users={users}
+            onOpenCustomer={handleOpenCustomer}
           />
         /* Customer dashboard */
         ) : selectedCustomer ? (
@@ -134,6 +144,7 @@ function AppShell() {
             onSelectEngagement={handleSelectEngagement}
             onNewEngagement={() => setShowNewModal(true)}
             users={users}
+            customers={customers}
           />
         ) : page === "issues" ? (
           <IssuesPage onSelectEngagement={handleSelectEngagement} />
@@ -161,12 +172,20 @@ function AppShell() {
         open={showNewModal}
         onClose={() => setShowNewModal(false)}
         users={users}
+        customers={customers}
       />
     </div>
   );
 }
 
 export default function App() {
+  // Check for public share route: #/share/:customerId
+  const hash = window.location.hash;
+  const shareMatch = hash.match(/^#\/share\/(.+)$/);
+  if (shareMatch) {
+    return <SharePage customerId={shareMatch[1]} />;
+  }
+
   return (
     <AuthProvider>
       <AppShell />

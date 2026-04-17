@@ -6,7 +6,7 @@ import { STAGES, STAGE_KEYS, RAG_STATUSES, REGIONS, SEGMENTS, fmtDate, timeAgo }
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Input, Select, Spinner, EmptyState, Modal } from "../components/UI";
 import EngagementModal from "../components/EngagementModal";
 
-export default function EngagementsPage({ onSelectEngagement, onNewEngagement, users }) {
+export default function EngagementsPage({ onSelectEngagement, onNewEngagement, users, customers = [] }) {
   const { profile } = useAuth();
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +160,7 @@ export default function EngagementsPage({ onSelectEngagement, onNewEngagement, u
 
       {/* Edit modal */}
       {editTarget && (
-        <EngagementModal open={!!editTarget} onClose={() => setEditTarget(null)} initial={editTarget} users={users}/>
+        <EngagementModal open={!!editTarget} onClose={() => setEditTarget(null)} initial={editTarget} users={users} customers={customers}/>
       )}
 
       {/* Delete confirm */}

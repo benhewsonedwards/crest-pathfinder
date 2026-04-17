@@ -65,7 +65,7 @@ function MiniGantt({ stageTasks }) {
 }
 
 // ─── Shareable view modal ─────────────────────────────────────────────────────
-function ShareableView({ customer, integrations, engagements, onClose }) {
+function ShareableView({ customer, integrations, engagements, onClose, onPublish }) {
   const latestEngagement = engagements.sort((a, b) => {
     const ai = STAGE_KEYS.indexOf(a.currentStage);
     const bi = STAGE_KEYS.indexOf(b.currentStage);
@@ -185,7 +185,9 @@ function ShareableView({ customer, integrations, engagements, onClose }) {
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
         <Btn variant="ghost" onClick={onClose}>Close preview</Btn>
-        <Btn>Publish & copy link</Btn>
+        <Btn onClick={onPublish}>
+          {customer.shareEnabled ? "📋 Copy share link" : "🔗 Publish & copy link"}
+        </Btn>
       </div>
     </Modal>
   );
@@ -238,6 +240,17 @@ export default function CustomerDashboard({ customer, onBack, users }) {
   const latestEngagement = engagements.sort((a, b) =>
     STAGE_KEYS.indexOf(b.currentStage) - STAGE_KEYS.indexOf(a.currentStage)
   )[0];
+
+  async function handlePublish() {
+    const shareUrl = `${window.location.origin}${window.location.pathname}#/share/${customer.id}`;
+    if (!customer.shareEnabled) {
+      await updateDoc(doc(db, "customers", customer.id), {
+        shareEnabled: true, updatedAt: serverTimestamp(),
+      });
+    }
+    navigator.clipboard.writeText(shareUrl).catch(() => {});
+    alert(`Share link copied!\n\n${shareUrl}`);
+  }
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
@@ -604,6 +617,7 @@ export default function CustomerDashboard({ customer, onBack, users }) {
           integrations={integrations}
           engagements={engagements}
           onClose={() => setShowShareable(false)}
+          onPublish={handlePublish}
         />
       )}
     </div>
