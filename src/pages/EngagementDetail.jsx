@@ -181,6 +181,7 @@ export default function EngagementDetail({ engagement, onBack, users }) {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState("overview");
   const [activeStage, setActiveStage] = useState(engagement.currentStage);
+  const [stageSubTab, setStageSubTab] = useState("tasks");
   const [saving, setSaving] = useState(false);
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
