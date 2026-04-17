@@ -589,12 +589,20 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   const totalPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
   const currentStageDef = STAGES.find(s => s.key === engagement.currentStage);
 
-  // Memoized callback for GanttChart — stable reference prevents unnecessary remounts
-  const ganttUpdateTask = useCallback((stageKey, taskId, updates) => {
-    const tasks = engagement.stageTasks?.[stageKey] || [];
+  // Memoized callback for GanttChart — writes only the dragged task, no cross-stage ripple
+  // (ripple still runs but only within the changed stage, keeping writes minimal)
+  const ganttUpdateTask = useCallback(async (stageKey, taskId, updates) => {
+    const tasks = [...(engagement.stageTasks?.[stageKey] || [])];
     const idx = tasks.findIndex(t => t.id === taskId);
-    if (idx !== -1) updateTask(stageKey, idx, updates);
-  }, [engagement.stageTasks]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (idx === -1) return;
+    tasks[idx] = { ...tasks[idx], ...updates };
+    // Ripple within this stage only — cross-stage ripple on next save avoids cascading writes
+    const rippled = rippleTasks(tasks);
+    await updateDoc(doc(db, "engagements", engagement.id), {
+      [`stageTasks.${stageKey}`]: rippled,
+      updatedAt: serverTimestamp(),
+    });
+  }, [engagement.stageTasks, engagement.id]);
   const rag = RAG_STATUSES.find(r => r.key === engagement.ragStatus) || RAG_STATUSES[0];
 
   const stageTabs = STAGE_KEYS.map(sk => {
