@@ -266,7 +266,63 @@ export function FieldGroup({ label, children, required, style }) {
   );
 }
 
-// Inject spin keyframe
+// Inject spin + toast keyframes
 const styleEl = document.createElement("style");
-styleEl.textContent = `@keyframes spin { to { transform: rotate(360deg); } }`;
+styleEl.textContent = `
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes toastIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes toastOut { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(12px); } }
+`;
 document.head.appendChild(styleEl);
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+import { useState as _useState, useCallback as _useCallback, useRef as _useRef, useEffect as _useEffect } from "react";
+
+export function useToast() {
+  const [toasts, setToasts] = _useState([]);
+  const idRef = _useRef(0);
+
+  const toast = _useCallback((message, type = "success", duration = 3000) => {
+    const id = ++idRef.current;
+    setToasts(t => [...t, { id, message, type, leaving: false }]);
+    setTimeout(() => {
+      setToasts(t => t.map(x => x.id === id ? { ...x, leaving: true } : x));
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 300);
+    }, duration);
+  }, []);
+
+  return { toasts, toast };
+}
+
+export function ToastContainer({ toasts }) {
+  if (!toasts.length) return null;
+  return (
+    <div style={{
+      position: "fixed", bottom: 24, right: 24,
+      display: "flex", flexDirection: "column", gap: 8,
+      zIndex: 9999, pointerEvents: "none",
+    }}>
+      {toasts.map(t => {
+        const colours = {
+          success: { bg: "var(--green)", text: "white" },
+          error:   { bg: "var(--red)",   text: "white" },
+          info:    { bg: "var(--purple)", text: "white" },
+        };
+        const c = colours[t.type] || colours.info;
+        return (
+          <div key={t.id} style={{
+            background: c.bg, color: c.text,
+            padding: "10px 16px", borderRadius: "var(--radius)",
+            fontSize: 13, fontWeight: 500, fontFamily: "'Noto Sans', sans-serif",
+            boxShadow: "var(--shadow-lg)",
+            animation: `${t.leaving ? "toastOut" : "toastIn"} 0.25s ease`,
+            display: "flex", alignItems: "center", gap: 8, maxWidth: 340,
+          }}>
+            <span>{t.type === "success" ? "✓" : t.type === "error" ? "✕" : "ℹ"}</span>
+            {t.message}
+          </div>
+        );
+      })}
+    </div>
+  );
+}

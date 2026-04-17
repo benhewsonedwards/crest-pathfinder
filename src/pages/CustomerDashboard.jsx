@@ -9,7 +9,8 @@ import { STAGES, STAGE_KEYS, RAG_STATUSES, fmtDate, timeAgo, stageColour } from 
 import { integrationStatus, ticketType, TICKET_TYPES } from "../lib/integrationConstants";
 import {
   Card, CardHeader, Label, Pill, Avatar, Btn,
-  Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner, EmptyState
+  Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner, EmptyState,
+  useToast, ToastContainer
 } from "../components/UI";
 import IntegrationModal from "../components/IntegrationModal";
 
@@ -205,6 +206,7 @@ export default function CustomerDashboard({ customer, onBack, users }) {
   const [showShareable, setShowShareable] = useState(false);
 
   const canEdit = ["super_admin", "admin", "cse"].includes(profile?.role);
+  const { toasts, toast } = useToast();
 
   useEffect(() => {
     if (!customer?.id) return;
@@ -249,7 +251,7 @@ export default function CustomerDashboard({ customer, onBack, users }) {
       });
     }
     navigator.clipboard.writeText(shareUrl).catch(() => {});
-    alert(`Share link copied!\n\n${shareUrl}`);
+    toast("Share link copied to clipboard!", "success");
   }
 
   if (loading) return (
@@ -620,6 +622,8 @@ export default function CustomerDashboard({ customer, onBack, users }) {
           onPublish={handlePublish}
         />
       )}
+
+      <ToastContainer toasts={toasts} />
     </div>
   );
 }
