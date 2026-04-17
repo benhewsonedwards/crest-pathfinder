@@ -932,13 +932,13 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
 
       {/* ── GANTT ── */}
       {activeTab === "gantt" && (
-        <Card style={{ padding: 20 }}>
+        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 20, boxShadow: "var(--shadow-sm)" }}>
           <GanttChart
             stageTasks={engagement.stageTasks || {}}
             canEdit={canEdit}
             onUpdateTask={ganttUpdateTask}
           />
-        </Card>
+        </div>
       )}
 
       {/* ── ACTIVITY ── */}
