@@ -183,7 +183,20 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
               onMouseLeave={e2 => e2.currentTarget.style.background = "transparent"}
               >
                 <div>
-                  <p style={{ fontWeight: 500, fontSize: 13 }}>{e.customer}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <p style={{ fontWeight: 500, fontSize: 13 }}>{e.customer}</p>
+                    {e.planType && (
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 3,
+                        padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700,
+                        background: e.planType === "Enhancement" ? "rgba(101,89,255,0.12)" : "rgba(249,115,22,0.12)",
+                        color: e.planType === "Enhancement" ? "var(--purple)" : "#ea6b0a",
+                        flexShrink: 0,
+                      }}>
+                        {e.planType === "Enhancement" ? "⚡" : "🚀"} {e.planType}
+                      </span>
+                    )}
+                  </div>
                   {e.csId && <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{e.csId}</p>}
                   {allTasks.length > 0 && (
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4 }}>
