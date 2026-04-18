@@ -31,7 +31,52 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const CALL_KEYWORDS = ["call", "session", "meeting", "kickoff", "intro", "discovery", "review", "demo", "uat", "handover", "training", "qbr"];
 function isCallTask(title) { return CALL_KEYWORDS.some(k => title?.toLowerCase().includes(k)); }
 
-// ─── Meeting panel — schedule, track, Gong link, call prep ────────────────────
+// ─── Coming soon placeholder button ──────────────────────────────────────────
+function ComingSoonBtn({ icon, label, tooltip }) {
+  const [showTip, setShowTip] = React.useState(false);
+  return (
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        disabled
+        onMouseEnter={() => setShowTip(true)}
+        onMouseLeave={() => setShowTip(false)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "6px 11px", borderRadius: "var(--radius-sm)",
+          border: "1px dashed var(--border2)", background: "transparent",
+          color: "var(--text-muted)", fontSize: 11, fontWeight: 600,
+          cursor: "not-allowed", fontFamily: "inherit", opacity: 0.7,
+        }}
+      >
+        <span style={{ fontSize: 13 }}>{icon}</span>
+        {label}
+        <span style={{
+          fontSize: 9, fontWeight: 700, letterSpacing: "0.05em",
+          background: "var(--surface2)", border: "1px solid var(--border)",
+          borderRadius: 4, padding: "1px 4px", color: "var(--text-muted)",
+          marginLeft: 2,
+        }}>SOON</span>
+      </button>
+      {showTip && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: "50%",
+          transform: "translateX(-50%)", zIndex: 100,
+          background: "#111827", color: "white", fontSize: 11, lineHeight: 1.5,
+          padding: "6px 10px", borderRadius: 6, whiteSpace: "nowrap",
+          boxShadow: "var(--shadow-md)", pointerEvents: "none",
+        }}>
+          {tooltip}
+          <div style={{
+            position: "absolute", top: "100%", left: "50%",
+            transform: "translateX(-50%)",
+            borderLeft: "5px solid transparent", borderRight: "5px solid transparent",
+            borderTop: "5px solid #111827",
+          }}/>
+        </div>
+      )}
+    </div>
+  );
+}
 function MeetingPanel({ task, engagement, onClose, onSave }) {
   const [gongLink, setGongLink] = useState(task.gongLink || "");
   const [meetingNotes, setMeetingNotes] = useState(task.meetingNotes || "");
@@ -401,6 +446,35 @@ function TaskEditPanel({ task, engagement, users, onSave, onClose }) {
           </Btn>
         </div>
       )}
+
+      {/* Integration placeholders */}
+      <div style={{
+        padding: "10px 12px", borderRadius: "var(--radius)",
+        background: "var(--surface2)", border: "1px solid var(--border)",
+      }}>
+        <p style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 8 }}>
+          Integrations
+        </p>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {isCallTask(task.title) && (
+            <ComingSoonBtn
+              icon="📅"
+              label="Schedule in Google Calendar"
+              tooltip="Create a Google Calendar event with Zoom link — requires Google OAuth setup"
+            />
+          )}
+          <ComingSoonBtn
+            icon="🎟"
+            label="Create Jira subtask"
+            tooltip="Auto-create a linked Jira ticket for this task — requires Atlassian OAuth setup"
+          />
+          <ComingSoonBtn
+            icon="💬"
+            label="Notify on Slack"
+            tooltip="Post an update to a Slack channel — requires Slack OAuth setup"
+          />
+        </div>
+      </div>
 
       <div style={{ display: "flex", gap: 8, paddingTop: 4 }}>
         <Btn onClick={handleSave} disabled={saving} style={{ flex: 1 }}>

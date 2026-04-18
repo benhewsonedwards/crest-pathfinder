@@ -11,6 +11,41 @@ import {
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 
+// ─── Coming soon placeholder (inline, no tooltip state needed at this scale) ──
+function ComingSoonBtn({ icon, label, tooltip }) {
+  const [tip, setTip] = React.useState(false);
+  return (
+    <div style={{ position: "relative", display: "inline-flex" }}>
+      <button
+        disabled
+        onMouseEnter={() => setTip(true)}
+        onMouseLeave={() => setTip(false)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 5,
+          padding: "6px 10px", borderRadius: "var(--radius-sm)",
+          border: "1px dashed var(--border2)", background: "transparent",
+          color: "var(--text-muted)", fontSize: 11, fontWeight: 600,
+          cursor: "not-allowed", fontFamily: "inherit", opacity: 0.75,
+        }}
+      >
+        <span style={{ fontSize: 12 }}>{icon}</span>
+        {label}
+        <span style={{ fontSize: 9, background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 4px", color: "var(--text-muted)", marginLeft: 2 }}>SOON</span>
+      </button>
+      {tip && tooltip && (
+        <div style={{
+          position: "absolute", bottom: "calc(100% + 6px)", left: "50%", transform: "translateX(-50%)",
+          zIndex: 200, background: "#111827", color: "white", fontSize: 11, padding: "6px 10px",
+          borderRadius: 6, whiteSpace: "nowrap", boxShadow: "var(--shadow-md)", pointerEvents: "none",
+        }}>
+          {tooltip}
+          <div style={{ position: "absolute", top: "100%", left: "50%", transform: "translateX(-50%)", borderLeft: "5px solid transparent", borderRight: "5px solid transparent", borderTop: "5px solid #111827" }}/>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Gantt chart ─────────────────────────────────────────────────────────────
 // Architecture: static SVG rendered once per prop change.
 // Only the ACTIVE drag bar re-renders (via DraggableBar component state).
@@ -414,10 +449,13 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
 
 
 // ─── Task row ─────────────────────────────────────────────────────────────────
+const CALL_KEYWORDS = ["call", "session", "meeting", "kickoff", "intro", "discovery", "review", "demo", "uat", "handover", "training", "qbr"];
+function isCallTask(title) { return CALL_KEYWORDS.some(k => title?.toLowerCase().includes(k)); }
+
 function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
   return (
     <div style={{
-      display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 56px 28px 28px",
+      display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 56px 28px 28px 28px",
       gap: 8, padding: "9px 16px", borderBottom: "1px solid var(--border)",
       alignItems: "center", opacity: task.done ? 0.6 : 1, transition: "opacity 0.15s",
       background: task.locked ? "rgba(101,89,255,0.03)" : "transparent",
@@ -445,6 +483,16 @@ function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
       <Pill color={task.done ? "green" : task.required ? "purple" : "grey"} style={{ fontSize: 10 }}>
         {task.done ? "Done" : task.required ? "Req" : "Opt"}
       </Pill>
+      {/* Calendar placeholder — only shows on call-type tasks */}
+      <button
+        disabled
+        title="Schedule in Google Calendar — coming soon (requires Google OAuth)"
+        style={{
+          background: "none", border: "none", cursor: "not-allowed",
+          fontSize: 13, padding: 2, borderRadius: 4, opacity: isCallTask(task.title) ? 0.5 : 0.15,
+          color: "var(--text-muted)",
+        }}
+      >📅</button>
       {/* Lock / unlock button */}
       <button
         onClick={() => onUpdate({ locked: !task.locked })}
@@ -777,10 +825,20 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
           </p>
         </div>
         {canEdit && stageKeys.indexOf(engagement.currentStage) < stageKeys.length - 1 && (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <Btn variant="success" onClick={advanceStage}>
               Advance → {stageList[stageKeys.indexOf(engagement.currentStage) + 1]?.shortLabel}
             </Btn>
+            <ComingSoonBtn
+              icon="💬"
+              label="Post to Slack"
+              tooltip="Notify your team channel when this stage advances — requires Slack OAuth setup"
+            />
+            <ComingSoonBtn
+              icon="🎟"
+              label="Sync to Jira"
+              tooltip="Create or update a linked Jira epic — requires Atlassian OAuth setup"
+            />
             <button
               onClick={() => setShowDelete(true)}
               style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "6px 12px", fontFamily: "inherit", transition: "all 0.13s" }}
@@ -1054,8 +1112,8 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
                       </div>
                     ) : (
                       <>
-                        <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 80px 28px", gap: 8, padding: "7px 16px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-                          {["✓", "Task", "Owner", "Start", "End", "Status", ""].map(h => <Label key={h}>{h}</Label>)}
+                        <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 56px 28px 28px 28px", gap: 8, padding: "7px 16px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+                          {["✓", "Task", "Owner", "Start", "End", "Status", "📅", "", ""].map((h, i) => <Label key={i} title={h === "📅" ? "Schedule in Google Calendar (coming soon)" : undefined}>{h}</Label>)}
                         </div>
                         {tasks.map((task, i) => (
                           <TaskRow key={task.id || i} task={task}
