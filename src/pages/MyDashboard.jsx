@@ -43,55 +43,23 @@ function MeetingPanel({ task, engagement, onClose, onSave }) {
   async function runCallPrep() {
     setPrepLoading(true); setPrepError(null); setPrep(null);
     try {
-      const prompt = `I have a customer call scheduled. Please help me prepare.
-
-Customer: ${engagement?.customer || "Unknown"}
-Call type: ${task.title}
-Stage: ${STAGES.find(s => s.key === task.stageKey)?.label || task.stageKey}
-${engagement?.notes ? `Context: ${engagement.notes}` : ""}
-
-Please:
-1. Search Glean for any previous calls, Slack messages, emails, or notes about this customer (${engagement?.customer})
-2. Look for any Jira tickets or issues related to this customer
-3. Check what integration types or modules they've mentioned (SSO, SCIM, API, etc)
-4. Find relevant SafetyCulture documentation for what they need
-
-Then provide a structured call prep brief with:
-- TALKING POINTS: Key things to cover based on their history and current stage
-- WHAT THEY'VE MENTIONED: Integration types, modules, concerns previously raised
-- THEIR CONTEXT: Company background and what matters to them
-- SC DOCUMENTATION: Links/references to relevant SC docs for their use case
-- NEXT STEPS TO CONFIRM: What needs to be agreed or actioned on this call
-
-Return as structured JSON:
-{
-  "talkingPoints": ["point 1", "point 2"],
-  "customerMentioned": [{"topic": "SSO", "detail": "they need Azure AD integration"}],
-  "customerContext": "2-3 sentences about the customer",
-  "scDocs": [{"title": "doc title", "url": "url or null", "relevance": "why relevant"}],
-  "nextSteps": ["step 1", "step 2"],
-  "previousCallSummary": "summary of last call or null"
-}`;
-
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/call-prep", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 2000,
-          messages: [{ role: "user", content: prompt }],
-          mcp_servers: [GLEAN_MCP],
+          taskTitle:       task.title,
+          stageLabel:      STAGES.find(s => s.key === task.stageKey)?.label || task.stageKey,
+          customer:        engagement?.customer,
+          engagementNotes: engagement?.notes || "",
+          modules:         engagement?.modules || [],
+          integrations:    engagement?.integrations || [],
+          oppType:         engagement?.oppType || "",
+          planType:        engagement?.planType || "Onboarding",
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error?.message || "API error");
-      const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
-      const s = text.indexOf("{"), e = text.lastIndexOf("}");
-      if (s >= 0 && e >= 0) {
-        setPrep(JSON.parse(text.slice(s, e + 1)));
-      } else {
-        setPrep({ raw: text });
-      }
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Server error ${response.status}`);
+      setPrep(data.result);
     } catch (err) {
       setPrepError(err.message);
     } finally {
@@ -186,13 +154,15 @@ Return as structured JSON:
 
           {prep && !prep.raw && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {/* Talking points */}
-              {prep.talkingPoints?.length > 0 && (
-                <PrepSection title="💬 Talking points" colour="var(--purple)">
-                  {prep.talkingPoints.map((p, i) => (
-                    <PrepBullet key={i}>{p}</PrepBullet>
-                  ))}
-                </PrepSection>
+
+              {/* Source confidence banner */}
+              {prep.sourceSummary && (
+                <div style={{ padding: "8px 12px", borderRadius: "var(--radius)", background: "var(--surface2)", border: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 12 }}>
+                    {prep.sourceConfidence === "high" ? "🟢" : prep.sourceConfidence === "medium" ? "🟠" : "⚪"}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-second)" }}>{prep.sourceSummary}</span>
+                </div>
               )}
 
               {/* Previous call */}
@@ -209,15 +179,43 @@ Return as structured JSON:
                 </PrepSection>
               )}
 
+              {/* Talking points */}
+              {prep.talkingPoints?.length > 0 && (
+                <PrepSection title="💬 Talking points" colour="var(--purple)">
+                  {prep.talkingPoints.map((p, i) => <PrepBullet key={i}>{p}</PrepBullet>)}
+                </PrepSection>
+              )}
+
+              {/* Critical questions to ask */}
+              {prep.criticalQuestions?.length > 0 && (
+                <PrepSection title="❓ Critical questions to ask" colour="var(--amber)">
+                  {prep.criticalQuestions.map((q, i) => <PrepBullet key={i}>{q}</PrepBullet>)}
+                </PrepSection>
+              )}
+
+              {/* Who should attend */}
+              {prep.whoShouldAttend?.length > 0 && (
+                <PrepSection title="👥 Who should be on this call" colour="var(--blue)">
+                  {prep.whoShouldAttend.map((w, i) => <PrepBullet key={i}>{w}</PrepBullet>)}
+                </PrepSection>
+              )}
+
               {/* What they've mentioned */}
               {prep.customerMentioned?.length > 0 && (
-                <PrepSection title="🗂 Topics they've raised" colour="var(--amber)">
+                <PrepSection title="🗂 Topics they've raised" colour="var(--orange)">
                   {prep.customerMentioned.map((m, i) => (
                     <div key={i} style={{ marginBottom: 4 }}>
                       <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)" }}>{m.topic}: </span>
                       <span style={{ fontSize: 11, color: "var(--text-second)" }}>{m.detail}</span>
                     </div>
                   ))}
+                </PrepSection>
+              )}
+
+              {/* Data gaps */}
+              {prep.dataGapsToFill?.length > 0 && (
+                <PrepSection title="⚠ Data gaps to fill on this call" colour="var(--red)">
+                  {prep.dataGapsToFill.map((g, i) => <PrepBullet key={i}>{g}</PrepBullet>)}
                 </PrepSection>
               )}
 
