@@ -50,7 +50,8 @@ function msToIso(ms) {
 // A single draggable bar — only this component re-renders during drag
 function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
   const [drag, setDrag] = React.useState(null);
-  const dragRef = React.useRef(null); // mirrors drag state so onUp can read it synchronously
+  const dragRef     = React.useRef(null);  // current drag position (synchronous)
+  const committedRef = React.useRef(null); // what we sent to Firestore, waiting to confirm
 
   const colour  = stageColour(task.stageKey);
   const movable = canEdit && !task.done && !task.locked;
@@ -58,8 +59,19 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
   // Don't render bars for tasks with no dates
   if (!task.startDate || !task.endDate) return <g/>;
 
-  const dispStart = drag ? drag.start : task.startDate;
-  const dispEnd   = drag ? drag.end   : task.endDate;
+  // Once Firestore delivers the committed dates back via props, clear our optimistic state
+  if (committedRef.current) {
+    const c = committedRef.current;
+    if (task.startDate === c.startDate && task.endDate === c.endDate) {
+      committedRef.current = null;
+      // drag is already null at this point — nothing to do
+    }
+  }
+
+  // Show: during drag → drag position; after drop until confirmed → committed position; otherwise → prop
+  const display = drag || committedRef.current || { start: task.startDate, end: task.endDate };
+  const dispStart = display.start;
+  const dispEnd   = display.end;
 
   const x1   = isoToX(dispStart || todayIso(), L);
   const x2   = isoToX(dispEnd   || workingDayAdd(dispStart || todayIso(), 1), L);
@@ -109,11 +121,13 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
       window.removeEventListener("mouseup",   onUp);
       window.removeEventListener("touchmove", onMove);
       window.removeEventListener("touchend",  onUp);
-      // Read final position from ref (synchronous, always current)
       const final = dragRef.current;
       dragRef.current = null;
+      // Clear the active drag state immediately (stops drag visuals)
       setDrag(null);
       if (final && (final.start !== ds.origStart || final.end !== ds.origEnd)) {
+        // Hold the committed position in a ref so we keep showing it until Firestore confirms
+        committedRef.current = final;
         onCommit(task.stageKey, task.id, { startDate: final.start, endDate: final.end });
       }
     }
@@ -488,18 +502,22 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
 
   // Memoized callback for GanttChart — writes only the dragged task, no cross-stage ripple
   // (ripple still runs but only within the changed stage, keeping writes minimal)
+  // Keep a ref to the latest engagement so ganttUpdateTask never uses a stale closure
+  const engagementRef = React.useRef(engagement);
+  engagementRef.current = engagement;
+
   const ganttUpdateTask = useCallback(async (stageKey, taskId, updates) => {
-    const tasks = [...(engagement.stageTasks?.[stageKey] || [])];
+    const eng = engagementRef.current;
+    const tasks = [...(eng.stageTasks?.[stageKey] || [])];
     const idx = tasks.findIndex(t => t.id === taskId);
     if (idx === -1) return;
     tasks[idx] = { ...tasks[idx], ...updates };
-    // Ripple within this stage only — cross-stage ripple on next save avoids cascading writes
     const rippled = rippleTasks(tasks);
-    await updateDoc(doc(db, "engagements", engagement.id), {
+    await updateDoc(doc(db, "engagements", eng.id), {
       [`stageTasks.${stageKey}`]: rippled,
       updatedAt: serverTimestamp(),
     });
-  }, [engagement.stageTasks, engagement.id]);
+  }, []); // empty deps — always reads fresh data via ref
   const rag = RAG_STATUSES.find(r => r.key === engagement.ragStatus) || RAG_STATUSES[0];
 
   const stageTabs = STAGE_KEYS.map(sk => {
