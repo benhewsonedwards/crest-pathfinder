@@ -33,7 +33,7 @@ function buildLayout(propTasks, minWidth = 600) {
   const mx = new Date(validDates[validDates.length - 1]);
   mn.setDate(mn.getDate() - 3);
   mx.setDate(mx.getDate() + 8);
-  const LABEL_W = 170, HANDLE_W = 8, ROW_H = 30;
+  const LABEL_W = 220, HANDLE_W = 8, ROW_H = 30;
   const totalMs = mx.getTime() - mn.getTime();
   const dateDrivenW = Math.ceil(totalMs / 86400000) * 14;
   const CHART_W = Math.max(dateDrivenW, minWidth, 400);
@@ -309,7 +309,7 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
             <text key={t.id||i} x={LABEL_W-10} y={i*ROW_H+24+4+(ROW_H-8)/2+4}
               fill={t.done?"#9CA3AF":"#374151"} fontSize={10}
               textAnchor="end" dominantBaseline="middle">
-              {t.title.length > 22 ? t.title.slice(0,20)+"…" : t.title}
+              {t.title.length > 30 ? t.title.slice(0,28)+"…" : t.title}
             </text>
           ))}
           {/* Top-left corner covers chart header row */}
