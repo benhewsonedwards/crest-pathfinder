@@ -49,9 +49,10 @@ function msToIso(ms) {
 
 // A single draggable bar — only this component re-renders during drag
 function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
-  const [drag, setDrag] = React.useState(null);
-  const dragRef     = React.useRef(null);  // current drag position (synchronous)
-  const committedRef = React.useRef(null); // what we sent to Firestore, waiting to confirm
+  const [drag, setDrag]       = React.useState(null);
+  const [hover, setHover]     = React.useState(false);
+  const dragRef               = React.useRef(null);
+  const committedRef          = React.useRef(null);
 
   const colour  = stageColour(task.stageKey);
   const movable = canEdit && !task.done && !task.locked;
@@ -145,14 +146,34 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
         <rect x={x1+2} y={y+2} width={barW} height={barH} rx={3}
           fill="rgba(0,0,0,0.1)" style={{ pointerEvents:"none" }}/>
       )}
+      {/* Bar body */}
       <rect x={x1} y={y} width={barW} height={barH} rx={3}
         fill={task.done ? colour+"28" : task.locked ? colour+"44" : drag ? colour+"BB" : colour+"70"}
         stroke={task.locked ? colour : "none"} strokeWidth={task.locked ? 1.5 : 0}
         strokeDasharray={task.locked ? "5 2" : "none"}
         style={{ cursor: movable ? "grab" : "default" }}
-        onMouseDown={ev => startDrag(ev, "move")}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onMouseDown={ev => { setHover(false); startDrag(ev, "move"); }}
         onTouchStart={ev => startDrag(ev, "move")}
       />
+      {/* Hover tooltip — shows when not dragging */}
+      {hover && !drag && (
+        <g style={{ pointerEvents: "none" }}>
+          <rect
+            x={Math.min(Math.max(x1 + barW/2 - 70, L.LABEL_W + 2), L.SVG_W - 142)}
+            y={y - 26} width={140} height={20} rx={4}
+            fill="#111827" opacity={0.9}
+          />
+          <text
+            x={Math.min(Math.max(x1 + barW/2, L.LABEL_W + 72), L.SVG_W - 72)}
+            y={y - 13} textAnchor="middle" dominantBaseline="middle"
+            fill="white" fontSize={10} fontWeight={500}
+          >
+            {fmtDate(dispStart)} → {fmtDate(dispEnd)}
+          </text>
+        </g>
+      )}
       <rect x={x1} y={y} width={3} height={barH} rx={1} fill={colour}
         style={{ pointerEvents:"none" }}/>
       {task.done && (
@@ -961,7 +982,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
 
       {/* ── GANTT ── */}
       {activeTab === "gantt" && (
-        <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 20, boxShadow: "var(--shadow-sm)" }}>
+        <div style={{ margin: "0 -28px", background: "var(--surface)", border: "1px solid var(--border)", borderTop: "none", borderLeft: "none", borderRight: "none" }}>
           <GanttChart
             stageTasks={engagement.stageTasks || {}}
             canEdit={canEdit}
