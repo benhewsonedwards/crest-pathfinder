@@ -25,21 +25,22 @@ function buildLayout(propTasks, minWidth = 600) {
   mx.setDate(mx.getDate() + 8);
   const LABEL_W = 170, HANDLE_W = 8, ROW_H = 30;
   const totalMs = mx.getTime() - mn.getTime();
-  // Fill the container: at least 14px/day, but always stretch to fill available width
+  // Chart fills the scrollable area — 14px/day minimum, but always at least minWidth
   const dateDrivenW = Math.ceil(totalMs / 86400000) * 14;
-  const CHART_W = Math.max(dateDrivenW, minWidth - LABEL_W, 400);
+  const CHART_W = Math.max(dateDrivenW, minWidth, 400);
   return {
     minMs: mn.getTime(), maxDate: mx,
     LABEL_W, HANDLE_W, ROW_H,
-    CHART_W, SVG_W: LABEL_W + CHART_W,
+    CHART_W,
+    SVG_W: LABEL_W + CHART_W, // kept for tooltip clamping in DraggableBar
     PX_PER_MS: CHART_W / totalMs,
     MS_PER_PX: totalMs / CHART_W,
   };
 }
 
 function isoToX(iso, L) {
-  if (!iso) return L.LABEL_W;
-  return L.LABEL_W + (new Date(iso).getTime() - L.minMs) * L.PX_PER_MS;
+  if (!iso) return 0;
+  return (new Date(iso).getTime() - L.minMs) * L.PX_PER_MS;
 }
 
 function msToIso(ms) {
@@ -104,7 +105,7 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
 
     function onMove(ev) {
       if (ev.cancelable) ev.preventDefault();
-      const curMs = L.minMs + (getX(ev) - L.LABEL_W) * L.MS_PER_PX;
+      const curMs = L.minMs + getX(ev) * L.MS_PER_PX;
       let ns = ds.origStart, ne = ds.origEnd;
       if (mode === "move") {
         ns = msToIso(curMs - ds.grabMs);
@@ -163,12 +164,12 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
       {hover && !drag && (
         <g style={{ pointerEvents: "none" }}>
           <rect
-            x={Math.min(Math.max(x1 + barW/2 - 70, L.LABEL_W + 2), L.SVG_W - 142)}
+            x={Math.min(Math.max(x1 + barW/2 - 70, 2), L.CHART_W - 142)}
             y={y - 26} width={140} height={20} rx={4}
             fill="#111827" opacity={0.9}
           />
           <text
-            x={Math.min(Math.max(x1 + barW/2, L.LABEL_W + 72), L.SVG_W - 72)}
+            x={Math.min(Math.max(x1 + barW/2, 72), L.CHART_W - 72)}
             y={y - 13} textAnchor="middle" dominantBaseline="middle"
             fill="white" fontSize={10} fontWeight={500}
           >
@@ -199,7 +200,7 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
             onTouchStart={ev => { ev.stopPropagation(); startDrag(ev, "right"); }}
           />
           {drag && (
-            <text x={Math.min(Math.max(x1+barW/2, L.LABEL_W+66), L.SVG_W-66)}
+            <text x={Math.min(Math.max(x1+barW/2, 66), L.CHART_W-66)}
               y={y-6} textAnchor="middle" dominantBaseline="auto"
               fill="#111827" fontSize={10} fontWeight={600}
               style={{ pointerEvents:"none" }}>
@@ -263,69 +264,81 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   }, [propTasks]);
 
   const todayX    = isoToX(todayIso(), L);
-  const showToday = todayX > LABEL_W && todayX < LABEL_W + CHART_W;
+  const showToday = todayX >= 0 && todayX < CHART_W;
 
+  // The outer wrapper is display:flex — fixed label SVG left, scrollable chart div right
   return (
-    <div ref={containerRef} style={{ overflowX:"auto", userSelect:"none", padding: "16px 20px 12px" }}>
-      <svg width={SVG_W} height={SVG_H}
-        style={{ display:"block", fontFamily:"Inter,sans-serif", touchAction:"none" }}>
+    <div style={{ display:"flex", userSelect:"none", fontFamily:"Inter,sans-serif" }}>
 
-        {propTasks.map((_, i) => (
-          <rect key={i} x={0} y={i*ROW_H+24} width={SVG_W} height={ROW_H}
-            fill={i%2===0?"#F8F9FC":"#FFFFFF"} />
-        ))}
+      {/* ── Fixed label column (never scrolls) ─────────────────────── */}
+      <div style={{ flexShrink:0, width: LABEL_W, background:"#F8F9FC",
+                    borderRight:"1px solid #E4E7EF", position:"relative", zIndex:2 }}>
+        <svg width={LABEL_W} height={SVG_H} style={{ display:"block", overflow:"visible" }}>
+          {/* Row backgrounds */}
+          {propTasks.map((_, i) => (
+            <rect key={i} x={0} y={i*ROW_H+24} width={LABEL_W} height={ROW_H}
+              fill={i%2===0?"#F8F9FC":"#FFFFFF"} />
+          ))}
+          {/* Stage colour sidebar */}
+          {stageGroups.map(g => (
+            <rect key={g.key} x={0} y={g.si*ROW_H+24} width={3}
+              height={(g.ei-g.si+1)*ROW_H} fill={stageColour(g.key)} rx={1}/>
+          ))}
+          {/* Task labels */}
+          {propTasks.map((t, i) => (
+            <text key={t.id||i} x={LABEL_W-10} y={i*ROW_H+24+4+(ROW_H-8)/2+4}
+              fill={t.done?"#9CA3AF":"#374151"} fontSize={10}
+              textAnchor="end" dominantBaseline="middle">
+              {t.title.length > 22 ? t.title.slice(0,20)+"…" : t.title}
+            </text>
+          ))}
+          {/* Top-left corner covers chart header row */}
+          <rect x={0} y={0} width={LABEL_W} height={24} fill="#F8F9FC"/>
+        </svg>
+      </div>
 
-        {months.map((m, i) => (
-          <g key={i}>
-            <line x1={m.x} y1={0} x2={m.x} y2={SVG_H} stroke="#E4E7EF" strokeWidth={1}/>
-            <text x={m.x+4} y={14} fill="#9CA3AF" fontSize={9}>{m.label}</text>
-          </g>
-        ))}
+      {/* ── Scrollable chart area ───────────────────────────────────── */}
+      <div ref={containerRef}
+           style={{ flex:1, overflowX:"auto", minWidth:0, position:"relative" }}>
+        <svg width={CHART_W} height={SVG_H}
+          style={{ display:"block", touchAction:"none" }}>
 
-        {showToday && (
-          <g>
-            <line x1={todayX} y1={0} x2={todayX} y2={SVG_H} stroke="#D97706" strokeWidth={1.5} strokeDasharray="4 3"/>
-            <text x={todayX+3} y={14} fill="#D97706" fontSize={9} fontWeight="600">Today</text>
-          </g>
-        )}
+          {/* Row backgrounds */}
+          {propTasks.map((_, i) => (
+            <rect key={i} x={0} y={i*ROW_H+24} width={CHART_W} height={ROW_H}
+              fill={i%2===0?"#F8F9FC":"#FFFFFF"} />
+          ))}
 
-        {/* Clip path — bars are clipped to chart area, can never overlap labels */}
-        <defs>
-          <clipPath id="gantt-chart-clip">
-            <rect x={LABEL_W} y={0} width={CHART_W + 20} height={SVG_H} />
-          </clipPath>
-        </defs>
+          {/* Month gridlines + labels */}
+          {months.map((m, i) => (
+            <g key={i}>
+              <line x1={m.x} y1={0} x2={m.x} y2={SVG_H} stroke="#E4E7EF" strokeWidth={1}/>
+              <text x={m.x+4} y={14} fill="#9CA3AF" fontSize={9}>{m.label}</text>
+            </g>
+          ))}
 
-        {/* Bars — wrapped in clip group so they can't paint over the label column */}
-        <g clipPath="url(#gantt-chart-clip)">
+          {/* Today marker */}
+          {showToday && (
+            <g>
+              <line x1={todayX} y1={0} x2={todayX} y2={SVG_H}
+                stroke="#D97706" strokeWidth={1.5} strokeDasharray="4 3"/>
+              <text x={todayX+3} y={14} fill="#D97706" fontSize={9} fontWeight="600">Today</text>
+            </g>
+          )}
+
+          {/* Task bars */}
           {propTasks.map((t, i) => (
             <DraggableBar key={t.id||i} task={t} idx={i} L={L}
               canEdit={canEdit} onCommit={onUpdateTask} containerRef={containerRef} />
           ))}
-        </g>
+        </svg>
 
-        {/* Label column — painted after bars, always on top */}
-        <rect x={0} y={0} width={LABEL_W} height={SVG_H} fill="#F8F9FC" style={{ pointerEvents:"none" }}/>
-        <line x1={LABEL_W} y1={0} x2={LABEL_W} y2={SVG_H} stroke="#E4E7EF" strokeWidth={1} style={{ pointerEvents:"none" }}/>
-        {propTasks.map((t, i) => (
-          <text key={t.id||i} x={LABEL_W-10} y={i*ROW_H+24+4+(ROW_H-8)/2+4}
-            fill={t.done ? "#9CA3AF" : "#374151"} fontSize={10}
-            textAnchor="end" dominantBaseline="middle">
-            {t.title.length > 22 ? t.title.slice(0,20)+"…" : t.title}
-          </text>
-        ))}
-
-        {stageGroups.map(g => (
-          <rect key={g.key} x={0} y={g.si*ROW_H+24} width={3}
-            height={(g.ei-g.si+1)*ROW_H} fill={stageColour(g.key)} rx={1}
-            style={{ pointerEvents:"none" }}/>
-        ))}
-      </svg>
-      {canEdit && (
-        <p style={{ fontSize:10, color:"var(--text-muted)", marginTop:6, paddingLeft:4 }}>
-          Drag bars to move · drag edges to resize · click 🔓 on a task to pin its dates
-        </p>
-      )}
+        {canEdit && (
+          <p style={{ fontSize:10, color:"var(--text-muted)", padding:"4px 6px 10px" }}>
+            Drag bars to move · drag edges to resize · click 🔓 on a task to pin its dates
+          </p>
+        )}
+      </div>
     </div>
   );
 }
