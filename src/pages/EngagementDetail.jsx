@@ -33,18 +33,18 @@ function buildLayout(propTasks, minWidth = 600) {
   const mx = new Date(validDates[validDates.length - 1]);
   mn.setDate(mn.getDate() - 3);
   mx.setDate(mx.getDate() + 8);
-  const LABEL_W = 220, HANDLE_W = 8, ROW_H = 30;
+  const LABEL_W = 220, HANDLE_W = 8, ROW_H = 30, STAGE_W = 52;
   const totalMs = mx.getTime() - mn.getTime();
   const dateDrivenW = Math.ceil(totalMs / 86400000) * 14;
   const CHART_W = Math.max(dateDrivenW, minWidth, 400);
   return {
     minMs: mn.getTime(), maxDate: mx,
-    LABEL_W, HANDLE_W, ROW_H,
+    LABEL_W, HANDLE_W, ROW_H, STAGE_W,
     CHART_W,
     SVG_W: LABEL_W + CHART_W,
     PX_PER_MS: CHART_W / totalMs,
     MS_PER_PX: totalMs / CHART_W,
-    maxReasonable, // expose so DraggableBar can check
+    maxReasonable,
   };
 }
 
@@ -262,8 +262,9 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
     </p>
   );
 
-  const { minMs, maxDate, LABEL_W, CHART_W, SVG_W, ROW_H } = L;
-  const SVG_H = propTasks.length * ROW_H + 44;
+  const { minMs, maxDate, LABEL_W, CHART_W, SVG_W, ROW_H, STAGE_W } = L;
+  const SVG_H = propTasks.length * ROW_H + 24;
+  const PANEL_W = STAGE_W + LABEL_W; // total fixed left panel width
 
   const months = React.useMemo(() => {
     const out = []; const cur = new Date(minMs);
@@ -286,34 +287,81 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   const todayX    = isoToX(todayIso(), L);
   const showToday = todayX >= 0 && todayX < CHART_W;
 
-  // The outer wrapper is display:flex — fixed label SVG left, scrollable chart div right
+  // The outer wrapper is display:flex — fixed panel left, scrollable chart div right
   return (
     <div style={{ display:"flex", userSelect:"none", fontFamily:"Inter,sans-serif" }}>
 
-      {/* ── Fixed label column (never scrolls) ─────────────────────── */}
-      <div style={{ flexShrink:0, width: LABEL_W, background:"#F8F9FC",
+      {/* ── Fixed left panel: stage column + label column ──────────── */}
+      <div style={{ flexShrink:0, width: PANEL_W, background:"#F8F9FC",
                     borderRight:"1px solid #E4E7EF", position:"relative", zIndex:2 }}>
-        <svg width={LABEL_W} height={SVG_H} style={{ display:"block", overflow:"visible" }}>
+        <svg width={PANEL_W} height={SVG_H} style={{ display:"block", overflow:"visible" }}>
+
           {/* Row backgrounds */}
           {propTasks.map((_, i) => (
-            <rect key={i} x={0} y={i*ROW_H+24} width={LABEL_W} height={ROW_H}
+            <rect key={i} x={0} y={i*ROW_H+24} width={PANEL_W} height={ROW_H}
               fill={i%2===0?"#F8F9FC":"#FFFFFF"} />
           ))}
-          {/* Stage colour sidebar */}
-          {stageGroups.map(g => (
-            <rect key={g.key} x={0} y={g.si*ROW_H+24} width={3}
-              height={(g.ei-g.si+1)*ROW_H} fill={stageColour(g.key)} rx={1}/>
-          ))}
-          {/* Task labels */}
+
+          {/* ── Stage column ── */}
+          {stageGroups.map(g => {
+            const colour = stageColour(g.key);
+            const y      = g.si * ROW_H + 24;
+            const h      = (g.ei - g.si + 1) * ROW_H;
+            const stage  = STAGES.find(s => s.key === g.key);
+            const label  = stage?.shortLabel || stage?.label || g.key;
+            const cx     = STAGE_W / 2;
+            const cy     = y + h / 2;
+            return (
+              <g key={g.key}>
+                {/* Colour fill */}
+                <rect x={0} y={y} width={STAGE_W} height={h}
+                  fill={colour + "18"} />
+                {/* Left accent strip */}
+                <rect x={0} y={y} width={3} height={h}
+                  fill={colour} rx={1} />
+                {/* Right border */}
+                <line x1={STAGE_W} y1={y} x2={STAGE_W} y2={y+h}
+                  stroke="#E4E7EF" strokeWidth={1} />
+                {/* Stage label — rotated, centred in the merged cell */}
+                {h >= 20 && (
+                  <text
+                    x={cx} y={cy}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={9} fontWeight={600}
+                    fill={colour}
+                    transform={`rotate(-90, ${cx}, ${cy})`}
+                    style={{ letterSpacing: "0.04em", textTransform: "uppercase", pointerEvents:"none" }}
+                  >
+                    {label.length > 12 ? label.slice(0,11)+"…" : label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+
+          {/* ── Task labels ── */}
           {propTasks.map((t, i) => (
-            <text key={t.id||i} x={LABEL_W-10} y={i*ROW_H+24+4+(ROW_H-8)/2+4}
-              fill={t.done?"#9CA3AF":"#374151"} fontSize={10}
+            <text key={t.id||i}
+              x={PANEL_W - 8}
+              y={i*ROW_H + 24 + ROW_H/2 + 1}
+              fill={t.done ? "#9CA3AF" : "#374151"} fontSize={10}
               textAnchor="end" dominantBaseline="middle">
               {t.title.length > 30 ? t.title.slice(0,28)+"…" : t.title}
             </text>
           ))}
-          {/* Top-left corner covers chart header row */}
-          <rect x={0} y={0} width={LABEL_W} height={24} fill="#F8F9FC"/>
+
+          {/* Header row cover */}
+          <rect x={0} y={0} width={PANEL_W} height={24} fill="#F8F9FC"/>
+          {/* Stage column header */}
+          <text x={STAGE_W/2} y={13} textAnchor="middle" dominantBaseline="middle"
+            fontSize={8} fontWeight={600} fill="#9CA3AF"
+            style={{ letterSpacing:"0.06em", textTransform:"uppercase" }}>
+            Stage
+          </text>
+          {/* Divider line between stage and label headers */}
+          <line x1={STAGE_W} y1={0} x2={STAGE_W} y2={24} stroke="#E4E7EF" strokeWidth={1}/>
+          {/* Bottom border of header */}
+          <line x1={0} y1={23} x2={PANEL_W} y2={23} stroke="#E4E7EF" strokeWidth={1}/>
         </svg>
       </div>
 
