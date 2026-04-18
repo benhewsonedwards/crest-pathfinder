@@ -17,24 +17,34 @@ import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 // All other bars are pure static SVG — zero overhead per mousemove frame.
 
 function buildLayout(propTasks, minWidth = 600) {
-  const dates = propTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
-  if (!dates.length) return null;
-  const mn = new Date(dates[0]);
-  const mx = new Date(dates[dates.length - 1]);
+  // Filter to only tasks with plausible dates (within 5 years of today)
+  const today = new Date();
+  const maxReasonable = new Date(today.getFullYear() + 5, 11, 31).toISOString().slice(0,10);
+  const minReasonable = '2020-01-01';
+
+  const validDates = propTasks
+    .flatMap(t => [t.startDate, t.endDate])
+    .filter(d => d && d >= minReasonable && d <= maxReasonable)
+    .sort();
+
+  if (!validDates.length) return null;
+
+  const mn = new Date(validDates[0]);
+  const mx = new Date(validDates[validDates.length - 1]);
   mn.setDate(mn.getDate() - 3);
   mx.setDate(mx.getDate() + 8);
   const LABEL_W = 170, HANDLE_W = 8, ROW_H = 30;
   const totalMs = mx.getTime() - mn.getTime();
-  // Chart fills the scrollable area — 14px/day minimum, but always at least minWidth
   const dateDrivenW = Math.ceil(totalMs / 86400000) * 14;
   const CHART_W = Math.max(dateDrivenW, minWidth, 400);
   return {
     minMs: mn.getTime(), maxDate: mx,
     LABEL_W, HANDLE_W, ROW_H,
     CHART_W,
-    SVG_W: LABEL_W + CHART_W, // kept for tooltip clamping in DraggableBar
+    SVG_W: LABEL_W + CHART_W,
     PX_PER_MS: CHART_W / totalMs,
     MS_PER_PX: totalMs / CHART_W,
+    maxReasonable, // expose so DraggableBar can check
   };
 }
 
@@ -60,8 +70,10 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
   const colour  = stageColour(task.stageKey);
   const movable = canEdit && !task.done && !task.locked;
 
-  // Don't render bars for tasks with no dates
+  // Don't render bars for tasks with no dates or corrupt far-future dates
+  const maxReasonable = L.maxReasonable || '2031-01-01';
   if (!task.startDate || !task.endDate) return <g/>;
+  if (task.startDate > maxReasonable || task.endDate > maxReasonable) return <g/>;
 
   // Once Firestore delivers the committed dates back via props, clear our optimistic state
   if (committedRef.current) {
