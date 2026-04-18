@@ -16,7 +16,7 @@ import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 // Only the ACTIVE drag bar re-renders (via DraggableBar component state).
 // All other bars are pure static SVG — zero overhead per mousemove frame.
 
-function buildLayout(propTasks) {
+function buildLayout(propTasks, minWidth = 600) {
   const dates = propTasks.flatMap(t => [t.startDate, t.endDate]).filter(Boolean).sort();
   if (!dates.length) return null;
   const mn = new Date(dates[0]);
@@ -25,11 +25,13 @@ function buildLayout(propTasks) {
   mx.setDate(mx.getDate() + 8);
   const LABEL_W = 170, HANDLE_W = 8, ROW_H = 30;
   const totalMs = mx.getTime() - mn.getTime();
-  const CHART_W = Math.max(Math.ceil(totalMs / 86400000) * 14, 600);
+  // Fill the container: at least 14px/day, but always stretch to fill available width
+  const dateDrivenW = Math.ceil(totalMs / 86400000) * 14;
+  const CHART_W = Math.max(dateDrivenW, minWidth - LABEL_W, 400);
   return {
     minMs: mn.getTime(), maxDate: mx,
     LABEL_W, HANDLE_W, ROW_H,
-    CHART_W, SVG_W: LABEL_W + CHART_W + 20,
+    CHART_W, SVG_W: LABEL_W + CHART_W,
     PX_PER_MS: CHART_W / totalMs,
     MS_PER_PX: totalMs / CHART_W,
   };
@@ -212,6 +214,18 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
 
 function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   const containerRef = React.useRef(null);
+  const [containerW, setContainerW] = React.useState(0);
+
+  // Measure container on mount and resize
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setContainerW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const propTasks = React.useMemo(() => {
     const out = [];
@@ -219,7 +233,7 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
     return out;
   }, [stageTasks]);
 
-  const L = React.useMemo(() => buildLayout(propTasks), [propTasks]);
+  const L = React.useMemo(() => buildLayout(propTasks, containerW || 600), [propTasks, containerW]);
 
   if (!L || propTasks.length === 0) return (
     <p style={{ fontSize: 13, color: "var(--text-muted)", padding: "20px 0" }}>
@@ -252,7 +266,7 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
   const showToday = todayX > LABEL_W && todayX < LABEL_W + CHART_W;
 
   return (
-    <div ref={containerRef} style={{ overflowX:"auto", userSelect:"none" }}>
+    <div ref={containerRef} style={{ overflowX:"auto", userSelect:"none", padding: "16px 20px 12px" }}>
       <svg width={SVG_W} height={SVG_H}
         style={{ display:"block", fontFamily:"Inter,sans-serif", touchAction:"none" }}>
 
@@ -982,7 +996,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
 
       {/* ── GANTT ── */}
       {activeTab === "gantt" && (
-        <div style={{ margin: "0 -28px", background: "var(--surface)", border: "1px solid var(--border)", borderTop: "none", borderLeft: "none", borderRight: "none" }}>
+        <div style={{ margin: "0 -28px -48px", background: "var(--surface)", borderTop: "1px solid var(--border)" }}>
           <GanttChart
             stageTasks={engagement.stageTasks || {}}
             canEdit={canEdit}
