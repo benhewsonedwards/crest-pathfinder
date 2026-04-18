@@ -183,7 +183,7 @@ export default function EngagementsPage({ onSelectEngagement, onNewEngagement, u
 
       {/* Edit modal */}
       {editTarget && (
-        <EngagementModal open={!!editTarget} onClose={() => setEditTarget(null)} initial={editTarget} users={users} customers={customers}/>
+        <EngagementModal open={!!editTarget} onClose={() => setEditTarget(null)} initial={editTarget} users={users} customers={customers} engagements={engagements}/>
       )}
 
       {/* Delete confirm */}

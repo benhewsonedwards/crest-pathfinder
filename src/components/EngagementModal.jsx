@@ -2,7 +2,7 @@ import { useState } from "react";
 import { collection, addDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
-import { STAGES, REGIONS, SEGMENTS, SUBSCRIPTIONS, OPP_TYPES, TSHIRT_SIZES, CURRENCIES, PLAN_TYPES, RAG_STATUSES, SC_MODULES, INTEGRATIONS, buildDefaultTasks, buildAllStageTasks, todayIso } from "../lib/constants";
+import { STAGES, REGIONS, SEGMENTS, SUBSCRIPTIONS, OPP_TYPES, TSHIRT_SIZES, CURRENCIES, PLAN_TYPES, RAG_STATUSES, SC_MODULES, INTEGRATIONS, ENHANCEMENT_STAGE_KEYS, buildDefaultTasks, buildAllStageTasks, todayIso } from "../lib/constants";
 import { Modal, Btn, Input, Select, Textarea, FieldGroup, Label, Pill } from "../components/UI";
 
 const BLANK = {
@@ -237,12 +237,15 @@ function CustomerPicker({ customers, value, customerId, onChange, onCreateCustom
 }
 
 // ─── Main modal ───────────────────────────────────────────────────────────────
-export default function EngagementModal({ open, onClose, initial, users, customers = [] }) {
+export default function EngagementModal({ open, onClose, initial, users, customers = [], engagements = [] }) {
   const { user } = useAuth();
   const isEdit = !!initial?.id;
   const [form, setForm] = useState(initial ? { ...BLANK, ...initial } : { ...BLANK });
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("core");
+
+  // Alias for warning check
+  const existingEngagements = engagements;
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const toggleArr = (field, val) => {
@@ -257,7 +260,7 @@ export default function EngagementModal({ open, onClose, initial, users, custome
       if (isEdit) {
         await updateDoc(doc(db, "engagements", initial.id), { ...form, updatedAt: serverTimestamp() });
       } else {
-        const stageTasks = buildAllStageTasks(todayIso());
+        const stageTasks = buildAllStageTasks(todayIso(), form.planType);
         await addDoc(collection(db, "engagements"), {
           ...form, stageTasks, createdBy: user.uid,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
@@ -335,9 +338,58 @@ export default function EngagementModal({ open, onClose, initial, users, custome
             </Select>
           </FieldGroup>
           <FieldGroup label="Plan type">
-            <Select value={form.planType} onChange={e => upd("planType", e.target.value)}>
-              {PLAN_TYPES.map(p => <option key={p}>{p}</option>)}
-            </Select>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 2 }}>
+              {[
+                {
+                  value: "Onboarding",
+                  icon: "🚀",
+                  title: "Onboarding",
+                  desc: "First-time platform setup. COM-led onboarding included. A customer should have only one of these.",
+                  colour: "#F97316",
+                },
+                {
+                  value: "Enhancement",
+                  icon: "⚡",
+                  title: "Enhancement",
+                  desc: "For existing customers. Covers technical requests, trials of new functionality, expansions, relaunches, and re-onboarding.",
+                  colour: "#6559FF",
+                },
+              ].map(opt => {
+                const selected = form.planType === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => upd("planType", opt.value)}
+                    style={{
+                      textAlign: "left", padding: "12px 14px", borderRadius: 10, cursor: "pointer",
+                      border: `2px solid ${selected ? opt.colour : "var(--border)"}`,
+                      background: selected ? opt.colour + "12" : "var(--surface2)",
+                      transition: "all 0.15s", fontFamily: "inherit",
+                    }}
+                  >
+                    <div style={{ fontSize: 16, marginBottom: 4 }}>{opt.icon}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: selected ? opt.colour : "var(--text-primary)", marginBottom: 4 }}>
+                      {opt.title}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>{opt.desc}</div>
+                  </button>
+                );
+              })}
+            </div>
+            {/* Warn if selecting Onboarding and customer already has one */}
+            {form.planType === "Onboarding" && form.customerId && (() => {
+              const existing = (customers || []).filter(c => c.id !== form.id).find(c => c.id === form.customerId);
+              // Check engagements prop for existing Onboarding for this customer
+              const hasOnboarding = (existingEngagements || []).some(
+                e => e.customerId === form.customerId && e.planType === "Onboarding" && e.id !== form.id
+              );
+              return hasOnboarding ? (
+                <div style={{ marginTop: 8, padding: "8px 12px", borderRadius: 8, background: "var(--amber-light)", border: "1px solid var(--amber)", fontSize: 12, color: "var(--amber-dark, #92400e)" }}>
+                  ⚠️ This customer already has an Onboarding engagement. Consider using <strong>Enhancement</strong> instead.
+                </div>
+              ) : null;
+            })()}
           </FieldGroup>
           <FieldGroup label="Currency">
             <Select value={form.currency} onChange={e => upd("currency", e.target.value)}>

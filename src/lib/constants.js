@@ -3,12 +3,15 @@ export const STAGES = [
   { key: "opportunity",       label: "Opportunity",           shortLabel: "Opp",   colour: "#64748B", icon: "💼", description: "Deal in pipeline — Sales discovery, CS&I flagged" },
   { key: "requirements",      label: "Requirements",          shortLabel: "Req",   colour: "#3B82F6", icon: "📋", description: "Scoping sessions — capture integration needs, go-live targets" },
   { key: "technical-review",  label: "Technical Review",      shortLabel: "Tech",  colour: "#8B5CF6", icon: "🔬", description: "CSE solution design, architecture, feasibility" },
-  { key: "onboarding",        label: "Onboarding",            shortLabel: "Onb",   colour: "#F97316", icon: "🚀", description: "COM-led platform onboarding — templates, users, training" },
+  { key: "onboarding",        label: "Onboarding",            shortLabel: "Onb",   colour: "#F97316", icon: "🚀", description: "COM-led platform onboarding — templates, users, training. Onboarding engagements only." },
   { key: "solution-delivery", label: "Solution Delivery",     shortLabel: "Del",   colour: "#6559FF", icon: "⚙️",  description: "CSE integration build, PoC, testing, iteration" },
   { key: "go-live",           label: "Go-Live / Handover",    shortLabel: "Live",  colour: "#16A34A", icon: "🎯", description: "Production deployment, hypercare, CSE → CSM handover" },
   { key: "csm-ongoing",       label: "Ongoing (CSM)",         shortLabel: "CSM",   colour: "#0EA5E9", icon: "📊", description: "CSM-managed ongoing engagement — QBRs, adoption, renewals" },
 ];
 export const STAGE_KEYS = STAGES.map(s => s.key);
+
+// Stages relevant to Enhancement engagements — skip COM onboarding (customer is already live)
+export const ENHANCEMENT_STAGE_KEYS = ["opportunity", "requirements", "technical-review", "solution-delivery", "go-live", "csm-ongoing"];
 
 // ─── Roles ─────────────────────────────────────────────────────────────────────
 export const ROLES = [
@@ -265,11 +268,12 @@ export function buildDefaultTasks(stageKey, startDate = todayIso()) {
 }
 
 // Build tasks for ALL stages in sequence, each starting the day after the previous ends.
-// Returns the full stageTasks map.
-export function buildAllStageTasks(startDate = todayIso()) {
+// Enhancement engagements skip the Onboarding stage (customer is already on the platform).
+export function buildAllStageTasks(startDate = todayIso(), planType = "Onboarding") {
+  const keys = planType === "Enhancement" ? ENHANCEMENT_STAGE_KEYS : STAGE_KEYS;
   const result = {};
   let cursor = startDate;
-  for (const sk of STAGE_KEYS) {
+  for (const sk of keys) {
     const tasks = buildDefaultTasks(sk, cursor);
     result[sk] = tasks;
     const end = stageEndDate(tasks);

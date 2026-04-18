@@ -4,7 +4,7 @@ import { doc, updateDoc, deleteDoc, serverTimestamp, collection, addDoc, onSnaps
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import {
-  STAGES, STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES,
+  STAGES, STAGE_KEYS, ENHANCEMENT_STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES,
   buildDefaultTasks, buildAllStageTasks, rippleTasks, rippleAllStages, stageEndDate,
   fmtDate, fmtDateTime, stageColour, todayIso, workingDayAdd, diffDays
 } from "../lib/constants";
@@ -522,6 +522,12 @@ function ActivityLog({ engagementId }) {
 // ─── Main engagement detail ───────────────────────────────────────────────────
 export default function EngagementDetail({ engagement, onBack, users, onOpenCustomer, customers = [] }) {
   const { profile } = useAuth();
+
+  // Use the right stage set for this engagement's plan type
+  const isEnhancement = engagement.planType === "Enhancement";
+  const stageKeys = isEnhancement ? ENHANCEMENT_STAGE_KEYS : STAGE_KEYS;
+  const stageList  = STAGES.filter(s => stageKeys.includes(s.key));
+
   const [activeTab, setActiveTab] = useState("overview");
   const [activeStage, setActiveStage] = useState(engagement.currentStage);
   const [stageSubTab, setStageSubTab] = useState("tasks");
@@ -552,7 +558,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
       );
       // Build a flat Firestore update for all affected stages
       const firestoreUpdates = {};
-      STAGE_KEYS.forEach(sk => {
+      stageKeys.forEach(sk => {
         if (rippled[sk] && engagement.stageTasks?.[sk]) {
           firestoreUpdates[`stageTasks.${sk}`] = rippled[sk];
         }
@@ -567,7 +573,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
     const tasks = (engagement.stageTasks?.[stageKey] || []).filter((_, i) => i !== taskIdx);
     const rippled = rippleAllStages({ ...engagement.stageTasks, [stageKey]: tasks }, stageKey);
     const firestoreUpdates = {};
-    STAGE_KEYS.forEach(sk => { firestoreUpdates[`stageTasks.${sk}`] = rippled[sk] || []; });
+    stageKeys.forEach(sk => { firestoreUpdates[`stageTasks.${sk}`] = rippled[sk] || []; });
     await save(firestoreUpdates);
   }
 
@@ -585,20 +591,20 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
 
   async function loadDefaults(stageKey) {
     // Reload this stage's defaults starting from where the previous stage ended
-    const prevKey = STAGE_KEYS[STAGE_KEYS.indexOf(stageKey) - 1];
+    const prevKey = stageKeys[stageKeys.indexOf(stageKey) - 1];
     const prevEnd = prevKey ? stageEndDate(engagement.stageTasks?.[prevKey] || []) : null;
     const startDate = prevEnd ? workingDayAdd(prevEnd, 1) : todayIso();
     const newTasks = buildDefaultTasks(stageKey, startDate);
     const rippled = rippleAllStages({ ...engagement.stageTasks, [stageKey]: newTasks }, stageKey);
     const firestoreUpdates = {};
-    STAGE_KEYS.forEach(sk => { firestoreUpdates[`stageTasks.${sk}`] = rippled[sk] || []; });
+    stageKeys.forEach(sk => { firestoreUpdates[`stageTasks.${sk}`] = rippled[sk] || []; });
     await save(firestoreUpdates);
   }
 
   async function advanceStage() {
-    const idx = STAGE_KEYS.indexOf(engagement.currentStage);
-    if (idx >= STAGE_KEYS.length - 1) return;
-    const nextKey = STAGE_KEYS[idx + 1];
+    const idx = stageKeys.indexOf(engagement.currentStage);
+    if (idx >= stageKeys.length - 1) return;
+    const nextKey = stageKeys[idx + 1];
     const updates = { currentStage: nextKey };
 
     if (!(engagement.stageTasks?.[nextKey]?.length)) {
@@ -611,7 +617,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
     setActiveStage(nextKey);
   }
 
-  const allTasks = STAGE_KEYS.flatMap(sk => engagement.stageTasks?.[sk] || []);
+  const allTasks = stageKeys.flatMap(sk => engagement.stageTasks?.[sk] || []);
   const doneTasks = allTasks.filter(t => t.done).length;
   const totalPct = allTasks.length > 0 ? Math.round((doneTasks / allTasks.length) * 100) : 0;
   const currentStageDef = STAGES.find(s => s.key === engagement.currentStage);
@@ -636,7 +642,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   }, []); // empty deps — always reads fresh data via ref
   const rag = RAG_STATUSES.find(r => r.key === engagement.ragStatus) || RAG_STATUSES[0];
 
-  const stageTabs = STAGE_KEYS.map(sk => {
+  const stageTabs = stageKeys.map(sk => {
     const tasks = engagement.stageTasks?.[sk] || [];
     const done = tasks.filter(t => t.done).length;
     return { id: sk, label: STAGES.find(s=>s.key===sk)?.shortLabel, badge: tasks.length > 0 ? `${done}/${tasks.length}` : null };
@@ -760,6 +766,9 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
             <Pill color={rag.key === "green" ? "green" : rag.key === "red" ? "red" : "amber"}>
               {rag.emoji} {rag.label}
             </Pill>
+            <Pill color={isEnhancement ? "purple" : "orange"}>
+              {isEnhancement ? "⚡ Enhancement" : "🚀 Onboarding"}
+            </Pill>
             {saving && <Spinner size={14} />}
           </div>
           <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
@@ -767,10 +776,10 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
             {engagement.arr && ` · £${Number(engagement.arr).toLocaleString()}`}
           </p>
         </div>
-        {canEdit && STAGE_KEYS.indexOf(engagement.currentStage) < STAGE_KEYS.length - 1 && (
+        {canEdit && stageKeys.indexOf(engagement.currentStage) < stageKeys.length - 1 && (
           <div style={{ display: "flex", gap: 8 }}>
             <Btn variant="success" onClick={advanceStage}>
-              Advance → {STAGES[STAGE_KEYS.indexOf(engagement.currentStage) + 1]?.shortLabel}
+              Advance → {stageList[stageKeys.indexOf(engagement.currentStage) + 1]?.shortLabel}
             </Btn>
             <button
               onClick={() => setShowDelete(true)}
@@ -780,7 +789,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
             >Delete</button>
           </div>
         )}
-        {canEdit && STAGE_KEYS.indexOf(engagement.currentStage) === STAGE_KEYS.length - 1 && (
+        {canEdit && stageKeys.indexOf(engagement.currentStage) === stageKeys.length - 1 && (
           <button
             onClick={() => setShowDelete(true)}
             style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "6px 12px", fontFamily: "inherit", transition: "all 0.13s" }}
@@ -792,9 +801,9 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
 
       {/* Stage pipeline */}
       <div style={{ display: "flex", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", overflow: "hidden", marginBottom: 16, boxShadow: "var(--shadow-sm)" }}>
-        {STAGES.map((s, i) => {
+        {stageList.map((s, i) => {
           const isCurrent = s.key === engagement.currentStage;
-          const isPast = STAGE_KEYS.indexOf(s.key) < STAGE_KEYS.indexOf(engagement.currentStage);
+          const isPast = stageKeys.indexOf(s.key) < stageKeys.indexOf(engagement.currentStage);
           const tasks = engagement.stageTasks?.[s.key] || [];
           const prog = tasks.length > 0 ? Math.round((tasks.filter(t=>t.done).length/tasks.length)*100) : 0;
           return (
@@ -932,11 +941,11 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
             <Card>
               <CardHeader><Label>Stage summary</Label></CardHeader>
               <div>
-                {STAGES.map((s, i) => {
+                {stageList.map((s, i) => {
                   const tasks = engagement.stageTasks?.[s.key] || [];
                   const done = tasks.filter(t=>t.done).length;
                   const isCurrent = s.key === engagement.currentStage;
-                  const isPast = STAGE_KEYS.indexOf(s.key) < STAGE_KEYS.indexOf(engagement.currentStage);
+                  const isPast = stageKeys.indexOf(s.key) < stageKeys.indexOf(engagement.currentStage);
                   return (
                     <div key={s.key} style={{
                       display: "flex", alignItems: "center", gap: 10, padding: "9px 18px",
@@ -974,7 +983,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
         <div>
           {/* Stage selector */}
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-            {STAGES.map(s => {
+            {stageList.map(s => {
               const tasks = engagement.stageTasks?.[s.key] || [];
               const done = tasks.filter(t=>t.done).length;
               const capComp = captureCompleteness(s.key, (engagement.stageCapture||{})[s.key] || {});
