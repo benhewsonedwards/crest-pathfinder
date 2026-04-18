@@ -35,7 +35,7 @@ export const SEGMENTS = ["Enterprise", "Strategic", "Growth", "SB"];
 export const SUBSCRIPTIONS = ["Enterprise", "Premium", "Standard"];
 
 // ─── Opportunity types ─────────────────────────────────────────────────────────
-export const OPP_TYPES = ["New Business", "Expansion", "Renewal", "Migration", "Trial"];
+export const OPP_TYPES = ["New Business", "Expansion", "Renewal", "Migration", "Trial", "Technical Request"];
 
 // ─── T-shirt sizes ─────────────────────────────────────────────────────────────
 export const TSHIRT_SIZES = ["Small", "Standard", "Large", "Custom"];
@@ -44,7 +44,7 @@ export const TSHIRT_SIZES = ["Small", "Standard", "Large", "Custom"];
 export const CURRENCIES = ["GBP £", "USD $", "EUR €", "AUD $"];
 
 // ─── Plan types ────────────────────────────────────────────────────────────────
-export const PLAN_TYPES = ["Onboarding", "Roadmap"];
+export const PLAN_TYPES = ["Onboarding", "Enhancement"];
 
 // ─── RAG statuses ──────────────────────────────────────────────────────────────
 export const RAG_STATUSES = [
