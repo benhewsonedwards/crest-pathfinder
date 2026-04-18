@@ -7,6 +7,7 @@ import {
   fmtDate, fmtDateTime, stageColour, todayIso, workingDayAdd, rippleTasks, rippleAllStages, stageEndDate
 } from "../lib/constants";
 import { Pill, Btn, Input, Textarea, Modal, Spinner, Avatar, Label, FieldGroup } from "../components/UI";
+import { generateCallPrep } from "../lib/callPrepKnowledge";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isoToDate(iso) { return iso ? new Date(iso + "T00:00:00") : null; }
@@ -40,26 +41,11 @@ function MeetingPanel({ task, engagement, onClose, onSave }) {
   const [prepError, setPrepError] = useState(null);
   const [tab, setTab] = useState("track"); // track | prep
 
-  async function runCallPrep() {
+  function runCallPrep() {
     setPrepLoading(true); setPrepError(null); setPrep(null);
     try {
-      const response = await fetch("/api/call-prep", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          taskTitle:       task.title,
-          stageLabel:      STAGES.find(s => s.key === task.stageKey)?.label || task.stageKey,
-          customer:        engagement?.customer,
-          engagementNotes: engagement?.notes || "",
-          modules:         engagement?.modules || [],
-          integrations:    engagement?.integrations || [],
-          oppType:         engagement?.oppType || "",
-          planType:        engagement?.planType || "Onboarding",
-        }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Server error ${response.status}`);
-      setPrep(data.result);
+      const result = generateCallPrep(task.title, task.stageKey, engagement);
+      setPrep(result);
     } catch (err) {
       setPrepError(err.message);
     } finally {
@@ -129,7 +115,7 @@ function MeetingPanel({ task, engagement, onClose, onSave }) {
                 AI Call Preparation
               </p>
               <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 18, lineHeight: 1.6, maxWidth: 320, margin: "0 auto 18px" }}>
-                Searches Glean for previous calls, Slack messages, emails, and relevant SC documentation to build your brief.
+                Generates a structured call brief from the CSE/TA Engagement Framework, tailored to this call type, stage, and integrations in scope.
               </p>
               <Btn onClick={runCallPrep} style={{ minWidth: 180 }}>
                 Prepare for {engagement?.customer || "this call"} →
@@ -154,6 +140,13 @@ function MeetingPanel({ task, engagement, onClose, onSave }) {
 
           {prep && !prep.raw && (
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+
+              {/* Pre-call checklist */}
+              {prep.preCallChecklist?.length > 0 && (
+                <PrepSection title="✅ Pre-call checklist" colour="var(--teal)">
+                  {prep.preCallChecklist.map((p, i) => <PrepBullet key={i}>{p}</PrepBullet>)}
+                </PrepSection>
+              )}
 
               {/* Source confidence banner */}
               {prep.sourceSummary && (
