@@ -97,11 +97,19 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
     e.preventDefault();
     e.stopPropagation();
 
-    const mouseX   = getX(e);
-    const durMs    = new Date(task.endDate).getTime() - new Date(task.startDate).getTime();
-    const barStartX = isoToX(task.startDate, L);
-    const grabMs   = (mouseX - barStartX) * L.MS_PER_PX;
-    const ds       = { mode, durMs, grabMs, origStart: task.startDate, origEnd: task.endDate };
+    // Use the currently DISPLAYED start/end (which may be committedRef or prop)
+    // so the grab offset is correct regardless of whether Firestore has confirmed yet
+    const currentStart = committedRef.current?.start ?? task.startDate;
+    const currentEnd   = committedRef.current?.end   ?? task.endDate;
+
+    // Clear any pending committed state — we're starting fresh
+    committedRef.current = null;
+
+    const mouseX    = getX(e);
+    const barStartX = isoToX(currentStart, L);
+    const durMs     = new Date(currentEnd).getTime() - new Date(currentStart).getTime();
+    const grabMs    = (mouseX - barStartX) * L.MS_PER_PX;
+    const ds        = { mode, durMs, grabMs, origStart: currentStart, origEnd: currentEnd };
 
     function onMove(ev) {
       if (ev.cancelable) ev.preventDefault();
