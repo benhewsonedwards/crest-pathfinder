@@ -509,66 +509,78 @@ function TaskCard({ item, users, onEdit, onToggleDone }) {
 }
 
 // ─── Calendar day cell ────────────────────────────────────────────────────────
-function CalendarDayCell({ date, tasks, isToday, isCurrentMonth, onTaskClick }) {
+// tasks = items that START on this day (for rendering)
+// spanCount = total tasks active on this day (for overflow display)
+function CalendarDayCell({ date, startTasks, spanCount, isToday, isCurrentMonth, isSelected, onDayClick, onTaskClick }) {
   const dayNum = date.getDate();
-  const dots = tasks.slice(0, 4);
-  const overflow = tasks.length - 4;
+  const visibleTasks = startTasks.slice(0, 3);
+  const overflow = spanCount - visibleTasks.length;
 
   return (
-    <div style={{
-      minHeight: 90, padding: "6px 7px",
-      background: isToday ? "var(--purple-light)" : "var(--surface)",
-      border: `1px solid ${isToday ? "var(--purple)" : "var(--border)"}`,
-      borderRadius: "var(--radius-sm)",
-      opacity: isCurrentMonth ? 1 : 0.4,
-      display: "flex", flexDirection: "column", gap: 2,
-    }}>
+    <div
+      onClick={() => onDayClick(dateToIso(date))}
+      style={{
+        minHeight: 90, padding: "6px 7px",
+        background: isSelected ? "var(--purple-light)" : isToday ? "#EEF4FF" : "var(--surface)",
+        border: `1px solid ${isSelected ? "var(--purple)" : isToday ? "#A5B4FC" : "var(--border)"}`,
+        borderRadius: "var(--radius-sm)",
+        opacity: isCurrentMonth ? 1 : 0.35,
+        display: "flex", flexDirection: "column", gap: 2,
+        cursor: "pointer", transition: "background 0.1s",
+        boxShadow: isSelected ? "0 0 0 2px rgba(101,89,255,0.25)" : "none",
+      }}
+      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "var(--surface2)"; }}
+      onMouseLeave={e => { e.currentTarget.style.background = isSelected ? "var(--purple-light)" : isToday ? "#EEF4FF" : "var(--surface)"; }}
+    >
       <span style={{
-        fontSize: 11, fontWeight: isToday ? 800 : 500,
-        color: isToday ? "var(--purple)" : "var(--text-second)",
-        marginBottom: 2, lineHeight: 1,
+        fontSize: 11, fontWeight: isToday || isSelected ? 800 : 500,
+        color: isSelected ? "var(--purple)" : isToday ? "#6366F1" : "var(--text-second)",
+        marginBottom: 2, lineHeight: 1, flexShrink: 0,
       }}>
         {isToday ? "Today" : dayNum}
       </span>
-      {dots.map((item, i) => {
+      {visibleTasks.map((item, i) => {
         const colour = stageColour(item.task.stageKey);
+        // Calculate how many days this task spans (capped at remaining days visible)
         return (
           <div
             key={i}
             onClick={e => { e.stopPropagation(); onTaskClick(item); }}
-            title={`${item.task.title} — ${item.engagement?.customer}`}
+            title={`${item.task.title} — ${item.engagement?.customer} (${fmtDate(item.task.startDate)} → ${fmtDate(item.task.endDate)})`}
             style={{
-              fontSize: 9, lineHeight: 1.3, padding: "2px 5px",
-              borderRadius: 4, background: item.task.done ? "var(--green-light)" : colour + "18",
+              fontSize: 9, lineHeight: 1.4, padding: "2px 6px",
+              borderRadius: 4,
+              background: item.task.done ? "var(--green-light)" : colour + "22",
               color: item.task.done ? "var(--green)" : colour,
-              fontWeight: 600, cursor: "pointer", overflow: "hidden",
+              fontWeight: 700, cursor: "pointer", overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap",
               borderLeft: `2px solid ${item.task.done ? "var(--green)" : colour}`,
               textDecoration: item.task.done ? "line-through" : "none",
             }}
-            onMouseEnter={e => e.currentTarget.style.opacity = "0.75"}
-            onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+            onMouseEnter={e => { e.stopPropagation(); e.currentTarget.style.opacity = "0.75"; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
           >
             {isCallTask(item.task.title) && "📹 "}
-            {item.task.title.length > 16 ? item.task.title.slice(0, 15) + "…" : item.task.title}
+            {item.task.title.length > 18 ? item.task.title.slice(0, 17) + "…" : item.task.title}
           </div>
         );
       })}
       {overflow > 0 && (
-        <span style={{ fontSize: 9, color: "var(--text-muted)", paddingLeft: 4 }}>+{overflow} more</span>
+        <span style={{ fontSize: 9, color: "var(--text-muted)", paddingLeft: 2, marginTop: 1 }}>
+          +{overflow} more
+        </span>
       )}
     </div>
   );
 }
 
 // ─── Week calendar ────────────────────────────────────────────────────────────
-function WeekCalendar({ tasks, weekStart, onTaskClick }) {
+function WeekCalendar({ tasks, weekStart, selectedDay, onDayClick, onTaskClick }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
   const today = new Date();
 
   return (
     <div>
-      {/* Day headers */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6, marginBottom: 6 }}>
         {days.map((d, i) => (
           <div key={i} style={{ textAlign: "center" }}>
@@ -580,18 +592,18 @@ function WeekCalendar({ tasks, weekStart, onTaskClick }) {
           </div>
         ))}
       </div>
-
-      {/* Day cells */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
         {days.map((d, i) => {
-          const dayTasks = tasks.filter(item =>
-            dateInRange(d, item.task.startDate, item.task.endDate)
-          );
+          const iso = dateToIso(d);
+          const startTasks = tasks.filter(item => item.task.startDate === iso);
+          const spanCount  = tasks.filter(item => dateInRange(d, item.task.startDate, item.task.endDate)).length;
           return (
             <CalendarDayCell
-              key={i} date={d} tasks={dayTasks}
+              key={i} date={d}
+              startTasks={startTasks} spanCount={spanCount}
               isToday={sameDay(d, today)} isCurrentMonth={true}
-              onTaskClick={onTaskClick}
+              isSelected={selectedDay === iso}
+              onDayClick={onDayClick} onTaskClick={onTaskClick}
             />
           );
         })}
@@ -601,12 +613,10 @@ function WeekCalendar({ tasks, weekStart, onTaskClick }) {
 }
 
 // ─── Month calendar ──────────────────────────────────────────────────────────
-function MonthCalendar({ tasks, monthStart, onTaskClick }) {
+function MonthCalendar({ tasks, monthStart, selectedDay, onDayClick, onTaskClick }) {
   const today = new Date();
   const year = monthStart.getFullYear(), month = monthStart.getMonth();
   const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  // Grid start: Monday before or on firstDay
   const gridStart = startOfWeek(firstDay);
   const cells = [];
   for (let i = 0; i < 42; i++) cells.push(addDays(gridStart, i));
@@ -620,15 +630,17 @@ function MonthCalendar({ tasks, monthStart, onTaskClick }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
         {cells.map((d, i) => {
-          const dayTasks = tasks.filter(item =>
-            dateInRange(d, item.task.startDate, item.task.endDate)
-          );
+          const iso = dateToIso(d);
+          const startTasks = tasks.filter(item => item.task.startDate === iso);
+          const spanCount  = tasks.filter(item => dateInRange(d, item.task.startDate, item.task.endDate)).length;
           return (
             <CalendarDayCell
-              key={i} date={d} tasks={dayTasks}
+              key={i} date={d}
+              startTasks={startTasks} spanCount={spanCount}
               isToday={sameDay(d, today)}
               isCurrentMonth={d.getMonth() === month}
-              onTaskClick={onTaskClick}
+              isSelected={selectedDay === iso}
+              onDayClick={onDayClick} onTaskClick={onTaskClick}
             />
           );
         })}
@@ -642,10 +654,11 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   const { user, profile } = useAuth();
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [calView, setCalView] = useState("week"); // week | month
+  const [calView, setCalView] = useState("month"); // week | month
   const [weekStart, setWeekStart] = useState(startOfWeek(new Date()));
   const [monthStart, setMonthStart] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [editingItem, setEditingItem] = useState(null);
+  const [selectedDay, setSelectedDay] = useState(null); // ISO string of clicked day
   const [listFilter, setListFilter] = useState("mine"); // mine | all | overdue | upcoming | calls
   const [showDone, setShowDone] = useState(false);
 
@@ -677,9 +690,26 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   const myUid = user?.uid;
   const today = todayIso();
 
+  // Managers (admin/super_admin) see all tasks; others see only their own on the calendar
+  const isManager = profile?.role === "admin" || profile?.role === "super_admin";
+
+  // Calendar shows: managers see all, others see only their assigned tasks
+  const calendarItems = useMemo(() => {
+    const base = allItems.filter(i => !i.task.done || showDone);
+    if (isManager) return base;
+    return base.filter(i => i.task.ownerUid === myUid);
+  }, [allItems, showDone, isManager, myUid]);
+
   const filteredItems = useMemo(() => {
     let base = allItems;
     if (!showDone) base = base.filter(i => !i.task.done);
+
+    // Day selection overrides the list filter — show tasks active on that specific day
+    if (selectedDay) {
+      return base.filter(i =>
+        dateInRange(new Date(selectedDay + "T00:00:00"), i.task.startDate, i.task.endDate)
+      );
+    }
 
     switch (listFilter) {
       case "mine":     return base.filter(i => i.task.ownerUid === myUid);
@@ -688,12 +718,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
       case "calls":    return base.filter(i => isCallTask(i.task.title));
       default:         return base;
     }
-  }, [allItems, listFilter, showDone, myUid, today]);
-
-  // Calendar always shows all tasks (gives the full picture across engagements)
-  const calendarItems = useMemo(() => {
-    return allItems.filter(i => !i.task.done || showDone);
-  }, [allItems, showDone]);
+  }, [allItems, listFilter, selectedDay, showDone, myUid, today]);
 
   // Stats
   const myTasks    = allItems.filter(i => !i.task.done && i.task.ownerUid === myUid);
@@ -860,12 +885,19 @@ export default function MyDashboard({ onSelectEngagement, users }) {
 
           <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: 16, boxShadow: "var(--shadow-sm)" }}>
             {calView === "week"
-              ? <WeekCalendar tasks={calendarItems} weekStart={weekStart} onTaskClick={setEditingItem} />
-              : <MonthCalendar tasks={calendarItems} monthStart={monthStart} onTaskClick={setEditingItem} />
+              ? <WeekCalendar tasks={calendarItems} weekStart={weekStart} selectedDay={selectedDay}
+                  onDayClick={d => { setSelectedDay(prev => prev === d ? null : d); }}
+                  onTaskClick={setEditingItem} />
+              : <MonthCalendar tasks={calendarItems} monthStart={monthStart} selectedDay={selectedDay}
+                  onDayClick={d => { setSelectedDay(prev => prev === d ? null : d); }}
+                  onTaskClick={setEditingItem} />
             }
 
             {/* Stage legend */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)" }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)", alignItems: "center" }}>
+              {!isManager && (
+                <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 6 }}>Showing your tasks only</span>
+              )}
               {STAGES.map(s => (
                 <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: stageColour(s.key), flexShrink: 0 }} />
@@ -881,9 +913,19 @@ export default function MyDashboard({ onSelectEngagement, users }) {
           {/* List header + filters */}
           <div style={{ marginBottom: 12 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <h2 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
-                Tasks
-              </h2>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <h2 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, color: "var(--text-primary)" }}>
+                  {selectedDay ? fmtDate(selectedDay) : "Tasks"}
+                </h2>
+                {selectedDay && (
+                  <button
+                    onClick={() => setSelectedDay(null)}
+                    style={{ fontSize: 10, padding: "2px 8px", borderRadius: 999, border: "1px solid var(--purple)", background: "var(--purple-light)", color: "var(--purple)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}
+                  >
+                    × Clear day filter
+                  </button>
+                )}
+              </div>
               <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 11, color: "var(--text-muted)" }}>
                 <input type="checkbox" checked={showDone} onChange={e => setShowDone(e.target.checked)}
                   style={{ accentColor: "var(--purple)", cursor: "pointer" }} />
@@ -891,6 +933,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
               </label>
             </div>
 
+            {!selectedDay && (
             <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
               {[
                 { id: "mine",     label: "My tasks" },
@@ -899,7 +942,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
                 { id: "upcoming", label: "Next 2 weeks" },
                 { id: "calls",    label: "📹 Calls" },
               ].map(f => (
-                <button key={f.id} onClick={() => setListFilter(f.id)} style={{
+                <button key={f.id} onClick={() => { setListFilter(f.id); setSelectedDay(null); }} style={{
                   padding: "3px 10px", borderRadius: 999, fontSize: 11, fontWeight: 600,
                   cursor: "pointer", border: "1px solid var(--border)", fontFamily: "inherit",
                   background: listFilter === f.id ? "var(--purple)" : "var(--surface)",
@@ -910,6 +953,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
                 </button>
               ))}
             </div>
+            )}
           </div>
 
           {/* Task list grouped by date */}
