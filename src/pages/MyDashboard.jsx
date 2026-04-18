@@ -14,7 +14,12 @@ function dateToIso(d) { return d ? d.toISOString().slice(0, 10) : ""; }
 function addDays(d, n) { const r = new Date(d); r.setDate(r.getDate() + n); return r; }
 function startOfWeek(d) { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); return r; } // Mon start
 function sameDay(a, b) { return a && b && a.toDateString() === b.toDateString(); }
-function between(d, s, e) { return d >= s && d <= e; }
+// Compare by ISO string to avoid timezone issues
+function dateInRange(dayDate, startIso, endIso) {
+  if (!startIso || !endIso) return false;
+  const d = dateToIso(dayDate);
+  return d >= startIso && d <= endIso;
+}
 
 const GLEAN_MCP = { type: "url", url: "https://safetyculture-be.glean.com/mcp/claude", name: "glean" };
 
@@ -579,11 +584,9 @@ function WeekCalendar({ tasks, weekStart, onTaskClick }) {
       {/* Day cells */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 6 }}>
         {days.map((d, i) => {
-          const dayTasks = tasks.filter(item => {
-            const s = isoToDate(item.task.startDate);
-            const e = isoToDate(item.task.endDate);
-            return s && e && between(d, s, e);
-          });
+          const dayTasks = tasks.filter(item =>
+            dateInRange(d, item.task.startDate, item.task.endDate)
+          );
           return (
             <CalendarDayCell
               key={i} date={d} tasks={dayTasks}
@@ -617,11 +620,9 @@ function MonthCalendar({ tasks, monthStart, onTaskClick }) {
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
         {cells.map((d, i) => {
-          const dayTasks = tasks.filter(item => {
-            const s = isoToDate(item.task.startDate);
-            const e = isoToDate(item.task.endDate);
-            return s && e && between(d, s, e);
-          });
+          const dayTasks = tasks.filter(item =>
+            dateInRange(d, item.task.startDate, item.task.endDate)
+          );
           return (
             <CalendarDayCell
               key={i} date={d} tasks={dayTasks}
@@ -689,12 +690,10 @@ export default function MyDashboard({ onSelectEngagement, users }) {
     }
   }, [allItems, listFilter, showDone, myUid, today]);
 
-  // Calendar tasks — mine in week, all in month (or same as filter)
+  // Calendar always shows all tasks (gives the full picture across engagements)
   const calendarItems = useMemo(() => {
-    return allItems.filter(i => !i.task.done || showDone).filter(i =>
-      listFilter === "all" ? true : i.task.ownerUid === myUid
-    );
-  }, [allItems, showDone, myUid, listFilter]);
+    return allItems.filter(i => !i.task.done || showDone);
+  }, [allItems, showDone]);
 
   // Stats
   const myTasks    = allItems.filter(i => !i.task.done && i.task.ownerUid === myUid);
