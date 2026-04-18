@@ -1,7 +1,5 @@
 // Vercel serverless function — proxies call-prep requests to Anthropic API + Glean MCP
-// Runs server-side so CSP doesn't block it
-
-export const config = { runtime: "nodejs18.x" };
+// Server-side: no browser CSP restrictions
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 
