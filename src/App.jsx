@@ -10,6 +10,7 @@ import TeamPage from "./pages/TeamPage";
 import IssuesPage from "./pages/IssuesPage";
 import CustomersPage from "./pages/CustomersPage";
 import CustomerDashboard from "./pages/CustomerDashboard";
+import MyDashboard from "./pages/MyDashboard";
 import SharePage from "./pages/SharePage";
 import Sidebar from "./components/Sidebar";
 import EngagementModal from "./components/EngagementModal";
@@ -18,7 +19,7 @@ import { Spinner } from "./components/UI";
 // Role-based default landing page
 function defaultPage(role) {
   if (role === "csm" || role === "com") return "customers";
-  return "pipeline";
+  return "dashboard";
 }
 
 function AppShell() {
@@ -144,6 +145,11 @@ function AppShell() {
             }}
           />
         /* Pages */
+        ) : page === "dashboard" ? (
+          <MyDashboard
+            onSelectEngagement={handleSelectEngagement}
+            users={users}
+          />
         ) : page === "customers" ? (
           <CustomersPage
             onSelectCustomer={handleSelectCustomer}

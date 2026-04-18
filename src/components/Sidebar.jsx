@@ -2,6 +2,7 @@ import { useAuth } from "../hooks/useAuth";
 import { Avatar } from "./UI";
 
 const NAV_ITEMS = [
+  { id: "dashboard",   icon: "🏠", label: "My Dashboard" },
   { id: "customers",   icon: "🏢", label: "Customers"   },
   { id: "pipeline",    icon: "⚡", label: "Pipeline"    },
   { id: "engagements", icon: "🗂️",  label: "Engagements" },
