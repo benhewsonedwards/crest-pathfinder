@@ -799,29 +799,32 @@ export default function MyDashboard({ onSelectEngagement, users }) {
         com:   engagement.comEmail,
         ae:    engagement.aeEmail,
         ta:    engagement.taEmail,
-        admin: engagement.cseEmail, // admin tasks default to CSE for matching
+        admin: engagement.cseEmail,
       };
       const roleKey = task.ownerRole || task.owner;
       if (roleKey && roleMap[roleKey] && roleMap[roleKey] === myEmail) return true;
     }
+    // Name-based fallback for seeded engagements that store cseAssigneeName instead of cseEmail
+    if (user?.displayName && engagement) {
+      const roleKey = task.ownerRole || task.owner;
+      if ((roleKey === "cse" || roleKey === "admin") && engagement.cseAssigneeName === user.displayName) return true;
+      if (roleKey === "csm" && engagement.csmName === user.displayName) return true;
+    }
     return false;
   }
 
-  // Managers (admin/super_admin) see all tasks; others see only their own on the calendar
-  const isManager = profile?.role === "admin" || profile?.role === "super_admin";
-
-  // Calendar shows: managers see all, others see only their assigned tasks
+  // Dashboard is always personal — shows only tasks assigned to the logged-in user
+  // regardless of role. Team-wide views are on Pipeline and Issues pages.
   const calendarItems = useMemo(() => {
-    const base = allItems.filter(i => !i.task.done || showDone);
-    if (isManager) return base;
-    return base.filter(i => isMyTask(i.task, i.engagement));
-  }, [allItems, showDone, isManager, myUid, myEmail]);
+    return allItems.filter(i => (!i.task.done || showDone) && isMyTask(i.task, i.engagement));
+  }, [allItems, showDone, myUid, myEmail]);
 
   const filteredItems = useMemo(() => {
-    let base = allItems;
+    // Dashboard is always personal — start from the user's own tasks only
+    let base = allItems.filter(i => isMyTask(i.task, i.engagement));
     if (!showDone) base = base.filter(i => !i.task.done);
 
-    // Day selection overrides the list filter — show tasks active on that specific day
+    // Day selection shows tasks active on that specific day (still user-scoped)
     if (selectedDay) {
       return base.filter(i =>
         dateInRange(new Date(selectedDay + "T00:00:00"), i.task.startDate, i.task.endDate)
@@ -829,13 +832,13 @@ export default function MyDashboard({ onSelectEngagement, users }) {
     }
 
     switch (listFilter) {
-      case "mine":     return base.filter(i => isMyTask(i.task, i.engagement));
+      case "mine":     return base;
       case "overdue":  return base.filter(i => i.task.endDate && i.task.endDate < today);
       case "upcoming": return base.filter(i => i.task.startDate && i.task.startDate >= today && i.task.startDate <= workingDayAdd(today, 14));
       case "calls":    return base.filter(i => isCallTask(i.task.title));
       default:         return base;
     }
-  }, [allItems, listFilter, selectedDay, showDone, myUid, today]);
+  }, [allItems, listFilter, selectedDay, showDone, myUid, myEmail, today]);
 
   // Stats — all filtered to current user's tasks only
   const myTasks     = allItems.filter(i => !i.task.done && isMyTask(i.task, i.engagement));
