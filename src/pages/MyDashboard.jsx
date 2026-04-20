@@ -784,8 +784,27 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   const myEmail = user?.email;
   const today = todayIso();
 
-  function isMyTask(task) {
-    return task.ownerUid === myUid || (myEmail && task.ownerEmail === myEmail);
+  // My tasks = tasks assigned to logged-in user by:
+  // 1. Explicit ownerUid/ownerEmail match (new engagements)
+  // 2. ownerRole === "cse" and the engagement's cseEmail matches me (legacy tasks without explicit email)
+  // 3. ownerRole === "csm"/"com"/"ae"/"ta" and engagement's corresponding email matches me
+  function isMyTask(task, engagement) {
+    if (task.ownerUid === myUid) return true;
+    if (myEmail && task.ownerEmail === myEmail) return true;
+    // Role-based fallback for tasks without explicit ownerEmail
+    if (myEmail && engagement) {
+      const roleMap = {
+        cse:   engagement.cseEmail,
+        csm:   engagement.csmEmail,
+        com:   engagement.comEmail,
+        ae:    engagement.aeEmail,
+        ta:    engagement.taEmail,
+        admin: engagement.cseEmail, // admin tasks default to CSE for matching
+      };
+      const roleKey = task.ownerRole || task.owner;
+      if (roleKey && roleMap[roleKey] && roleMap[roleKey] === myEmail) return true;
+    }
+    return false;
   }
 
   // Managers (admin/super_admin) see all tasks; others see only their own on the calendar
@@ -795,7 +814,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   const calendarItems = useMemo(() => {
     const base = allItems.filter(i => !i.task.done || showDone);
     if (isManager) return base;
-    return base.filter(i => isMyTask(i.task));
+    return base.filter(i => isMyTask(i.task, i.engagement));
   }, [allItems, showDone, isManager, myUid, myEmail]);
 
   const filteredItems = useMemo(() => {
@@ -810,7 +829,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
     }
 
     switch (listFilter) {
-      case "mine":     return base.filter(i => isMyTask(i.task));
+      case "mine":     return base.filter(i => isMyTask(i.task, i.engagement));
       case "overdue":  return base.filter(i => i.task.endDate && i.task.endDate < today);
       case "upcoming": return base.filter(i => i.task.startDate && i.task.startDate >= today && i.task.startDate <= workingDayAdd(today, 14));
       case "calls":    return base.filter(i => isCallTask(i.task.title));
@@ -819,7 +838,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   }, [allItems, listFilter, selectedDay, showDone, myUid, today]);
 
   // Stats — all filtered to current user's tasks only
-  const myTasks     = allItems.filter(i => !i.task.done && isMyTask(i.task));
+  const myTasks     = allItems.filter(i => !i.task.done && isMyTask(i.task, i.engagement));
   const overdue     = myTasks.filter(i => i.task.endDate && i.task.endDate < today);
   const dueThisWeek = myTasks.filter(i => i.task.endDate && i.task.endDate >= today && i.task.endDate <= workingDayAdd(today, 7));
   const callTasks   = myTasks.filter(i => isCallTask(i.task.title));
