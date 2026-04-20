@@ -15,6 +15,7 @@ const BLANK = {
   ragStatus: "green", currentStage: "opportunity",
   aeEmail: "", cseEmail: "", csmEmail: "", taEmail: "",
   modules: [], integrations: [], notes: "",
+  renewalDate: "", renewalARR: "", renewalStatus: "on_track", renewalNotes: "",
 };
 
 const BLANK_CUST = {
@@ -418,6 +419,28 @@ export default function EngagementModal({ open, onClose, initial, users, custome
               {RAG_STATUSES.map(r => <option key={r.key} value={r.key}>{r.emoji} {r.label}</option>)}
             </Select>
           </FieldGroup>
+          {/* ── Renewal ── */}
+          <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 2 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+              Renewal · <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>manual entry until Salesforce sync</span>
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <FieldGroup label="Renewal date">
+                <Input value={form.renewalDate} onChange={e => upd("renewalDate", e.target.value)} type="date" placeholder="Renewal date" />
+              </FieldGroup>
+              <FieldGroup label="Renewal ARR">
+                <Input value={form.renewalARR} onChange={e => upd("renewalARR", e.target.value)} type="number" placeholder="e.g. 45000" />
+              </FieldGroup>
+              <FieldGroup label="Renewal status">
+                <Select value={form.renewalStatus || "on_track"} onChange={e => upd("renewalStatus", e.target.value)}>
+                  <option value="on_track">🟢 On track</option>
+                  <option value="at_risk">🟠 At risk</option>
+                  <option value="needs_attention">🔴 Needs attention</option>
+                  <option value="not_renewing">⚫ Not renewing</option>
+                </Select>
+              </FieldGroup>
+            </div>
+          </div>
           <div style={{ gridColumn: "1 / -1" }}>
             <FieldGroup label="Notes">
               <Textarea value={form.notes} onChange={e => upd("notes", e.target.value)} placeholder="Internal context, risks, key contacts..." rows={3}/>
