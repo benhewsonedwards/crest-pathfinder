@@ -467,7 +467,6 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
   const [showPanel, setShowPanel] = React.useState(false);
   const [note, setNote]           = React.useState("");
   const [saving, setSaving]       = React.useState(false);
-  const [uploading, setUploading] = React.useState(false);
   const fileRef                   = React.useRef();
 
   const isCustomerTask = task.owner === "customer" || task.ownerRole === "customer";
@@ -489,18 +488,9 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
   async function handleFileUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-    setUploading(true);
-    try {
-      const { storage } = await import("../lib/firebase");
-      const { ref: sRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
-      if (!storage) throw new Error("No storage");
-      const path = `task-uploads/${stageKey}/${Date.now()}-${file.name}`;
-      const r = sRef(storage, path);
-      await uploadBytes(r, file);
-      const url = await getDownloadURL(r);
-      await onUpdate({ files: [...internalFiles, { name: file.name, url, uploadedAt: new Date().toISOString() }] });
-    } catch (err) { console.error("Upload failed:", err); }
-    setUploading(false); e.target.value = "";
+    // Firebase Storage requires Blaze (pay-as-you-go) plan — not available on free tier
+    alert("File uploads require Firebase Storage, which is available on the Blaze plan. This feature is a placeholder for now.");
+    e.target.value = "";
   }
 
   return (
@@ -623,9 +613,9 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
             style={{ fontSize: 11, padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "none", background: "var(--purple)", color: "white", cursor: "pointer", fontWeight: 600, opacity: !note.trim() ? 0.5 : 1, fontFamily: "inherit" }}>
             {saving ? "Saving..." : "Add note"}
           </button>
-          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+          <button onClick={() => fileRef.current?.click()}
             style={{ fontSize: 11, padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "transparent", color: "var(--text-second)", cursor: "pointer", fontFamily: "inherit" }}>
-            {uploading ? "Uploading..." : "📎 Attach file"}
+            📎 Attach file
           </button>
           <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
         </div>

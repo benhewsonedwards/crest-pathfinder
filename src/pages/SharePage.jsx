@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "../lib/firebase";
+import { db } from "../lib/firebase";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES, stageColour, fmtDate } from "../lib/constants";
 import { integrationStatus, TICKET_TYPES, ticketType } from "../lib/integrationConstants";
 import { loadShareLinkByToken } from "../lib/shareLinks";
@@ -72,8 +71,6 @@ function CustomerTaskRow({ task, stageKey, engagementId, taskIndex, onUpdate }) 
   const [expanded, setExpanded]   = useState(false);
   const [note, setNote]           = useState("");
   const [saving, setSaving]       = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [uploadedFiles, setFiles] = useState(task.customerFiles || []);
   const fileRef = useRef();
   const stage = STAGES.find(s => s.key === stageKey);
   const today = new Date().toISOString().slice(0, 10);
@@ -99,21 +96,10 @@ function CustomerTaskRow({ task, stageKey, engagementId, taskIndex, onUpdate }) 
 
   async function handleFileChange(e) {
     const file = e.target.files[0];
-    if (!file || !storage) return;
-    setUploading(true);
-    try {
-      const path = `customer-uploads/${engagementId}/${stageKey}/${Date.now()}-${file.name}`;
-      const sRef = storageRef(storage, path);
-      await uploadBytes(sRef, file);
-      const url = await getDownloadURL(sRef);
-      const entry = { name: file.name, url, uploadedAt: new Date().toISOString() };
-      const newFiles = [...uploadedFiles, entry];
-      setFiles(newFiles);
-      await onUpdate(taskIndex, stageKey, { customerFiles: newFiles });
-    } catch (err) {
-      console.error("Upload failed:", err);
-    }
-    setUploading(false);
+    if (!file) return;
+    // Firebase Storage requires Blaze plan — placeholder until upgraded
+    alert("File uploads require Firebase Storage (Blaze plan). This feature is not yet active.");
+    e.target.value = "";
   }
 
   return (
@@ -175,7 +161,7 @@ function CustomerTaskRow({ task, stageKey, engagementId, taskIndex, onUpdate }) 
           ))}
 
           {/* Uploaded files */}
-          {uploadedFiles.map((f, i) => (
+          {(task.customerFiles || []).map((f, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#6559FF", marginBottom: 4 }}>
               <span>📎</span>
               <a href={f.url} target="_blank" rel="noreferrer" style={{ color: "#6559FF" }}>{f.name}</a>
@@ -193,10 +179,9 @@ function CustomerTaskRow({ task, stageKey, engagementId, taskIndex, onUpdate }) 
               </button>
               <button
                 onClick={() => fileRef.current?.click()}
-                disabled={uploading}
                 style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "1px solid #E5E7EB", background: "white", cursor: "pointer", color: "#374151" }}
               >
-                {uploading ? "Uploading..." : "📎 Upload file"}
+                📎 Upload file
               </button>
               <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileChange} />
             </div>
