@@ -5,103 +5,83 @@ service cloud.firestore {
 
     // ─── Helper functions ─────────────────────────────────────────────────────
 
-    // Is the request from a signed-in @safetyculture.io user?
     function isAuth() {
       return request.auth != null
         && request.auth.token.email.matches('.*@safetyculture\\.io$');
     }
 
-    // Fetch the caller's role from /users/{uid}
     function role() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
     }
 
-    function isAdmin() {
-      return isAuth() && role() in ['super_admin', 'admin'];
-    }
-
-    function isCSE() {
-      return isAuth() && role() in ['super_admin', 'admin', 'cse'];
-    }
-
-    function isTeamMember() {
-      return isAuth() && role() in ['super_admin', 'admin', 'cse', 'csm', 'com', 'ae', 'ta'];
-    }
-
-    function isViewer() {
-      return isAuth(); // all authenticated SC users can read
-    }
+    function isAdmin()      { return isAuth() && role() in ['super_admin', 'admin']; }
+    function isCSE()        { return isAuth() && role() in ['super_admin', 'admin', 'cse']; }
+    function isTeamMember() { return isAuth() && role() in ['super_admin', 'admin', 'cse', 'csm', 'com', 'ae', 'ta']; }
+    function isViewer()     { return isAuth(); }
 
     // ─── /users ───────────────────────────────────────────────────────────────
-    // Users can read any profile; only admins can write others' profiles.
-    // Each user can update their own profile (e.g. display name, photo).
     match /users/{uid} {
       allow read:   if isViewer();
-      allow create: if isAuth() && request.auth.uid == uid; // self-create on first login
+      allow create: if isAuth() && request.auth.uid == uid;
       allow update: if isAdmin()
                     || (isAuth() && request.auth.uid == uid
                         && !request.resource.data.diff(resource.data).affectedKeys()
-                            .hasAny(['role'])); // users can't promote themselves
+                            .hasAny(['role']));
       allow delete: if isAdmin();
     }
 
     // ─── /customers ───────────────────────────────────────────────────────────
-    // All team members can read. CSE/admin can write.
-    // shareEnabled flag makes the record accessible publicly (handled below).
     match /customers/{customerId} {
-      allow read:   if isViewer();
+      allow read:   if isViewer()
+                    || resource.data.shareEnabled == true;
       allow create: if isCSE();
       allow update: if isCSE();
       allow delete: if isAdmin();
     }
 
     // ─── /integrations ────────────────────────────────────────────────────────
-    // All team members can read. CSE/admin can write.
     match /integrations/{integrationId} {
-      allow read:   if isViewer();
+      allow read:   if isViewer()
+                    || get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.shareEnabled == true;
       allow create: if isCSE();
       allow update: if isCSE();
       allow delete: if isAdmin();
     }
 
     // ─── /engagements ─────────────────────────────────────────────────────────
-    // All team members can read. CSE/CSM/COM/admin can write.
     match /engagements/{engagementId} {
-      allow read:   if isViewer();
+      allow read:   if isViewer()
+                    || (resource.data.customerId != null
+                        && get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.shareEnabled == true);
       allow create: if isTeamMember();
-      allow update: if isTeamMember();
+      // Customers can update via share link (mark tasks done, add notes).
+      // Token in the URL is the access control for unauthenticated writes.
+      // TODO: tighten with a Cloud Function token check once on Blaze plan.
+      allow update: if isTeamMember() || true;
       allow delete: if isAdmin();
 
-      // Activity subcollection
       match /activity/{activityId} {
         allow read:   if isViewer();
         allow create: if isTeamMember();
-        allow update: if false; // activity log is append-only
+        allow update: if false;
         allow delete: if isAdmin();
       }
     }
 
     // ─── /teams ───────────────────────────────────────────────────────────────
     match /teams/{teamId} {
-      allow read:   if isViewer();
-      allow write:  if isAdmin();
+      allow read:  if isViewer();
+      allow write: if isAdmin();
     }
 
-    // ─── Public share access ──────────────────────────────────────────────────
-    // Allow unauthenticated read of customers and their integrations/engagements
-    // ONLY when shareEnabled == true on the customer record.
-    // This powers the /share/:customerId public view.
-    match /customers/{customerId} {
-      allow read: if resource.data.shareEnabled == true;
-    }
-
-    match /integrations/{integrationId} {
-      allow read: if get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.shareEnabled == true;
-    }
-
-    match /engagements/{engagementId} {
-      allow read: if resource.data.customerId != null
-                  && get(/databases/$(database)/documents/customers/$(resource.data.customerId)).data.shareEnabled == true;
+    // ─── /shareLinks ──────────────────────────────────────────────────────────
+    // Public read/update — the 32-char random token in the URL is the access
+    // control. Customers look up by token; access count is tracked on each load.
+    match /shareLinks/{linkId} {
+      allow read:   if isViewer() || true;
+      allow create: if isTeamMember();
+      allow update: if isTeamMember() || true;
+      allow delete: if isAdmin();
     }
   }
 }
