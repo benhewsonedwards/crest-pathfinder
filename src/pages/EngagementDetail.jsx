@@ -465,6 +465,7 @@ const CALL_KEYWORDS = ["call", "session", "meeting", "kickoff", "intro", "discov
 function isCallTask(title) { return CALL_KEYWORDS.some(k => title?.toLowerCase().includes(k)); }
 
 function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users }) {
+  const { user } = useAuth();
   const [showPanel, setShowPanel] = React.useState(false);
   const [note, setNote]           = React.useState("");
   const [saving, setSaving]       = React.useState(false);
@@ -481,7 +482,12 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
   async function submitNote() {
     if (!note.trim()) return;
     setSaving(true);
-    const entry = { text: note.trim(), at: new Date().toISOString() };
+    const entry = {
+      text: note.trim(),
+      at: new Date().toISOString(),
+      authorName: user?.displayName || null,
+      authorPhoto: user?.photoURL || null,
+    };
     await onUpdate({ notes: [...internalNotes, entry] });
     setNote(""); setSaving(false);
   }

@@ -307,16 +307,41 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
 }
 
 // ─── Commentary tab component ─────────────────────────────────────────────────
-function CommentaryTab({ activityEntries, engagementComments }) {
+function CommentaryTab({ activityEntries, engagementComments, engagements }) {
   const [commView, setCommView] = useState("timeline");
   const [tagFilter, setTagFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
 
   const STAGE_ORDER = ["opportunity","requirements","technical-review","onboarding","solution-delivery","go-live","csm"];
 
-  const customerNotes = activityEntries.map(e => ({ ...e, _source: "customer", engagementName: null }));
-  const engComments   = engagementComments.map(e => ({ ...e, _source: "engagement" }));
-  const allComments   = [...customerNotes, ...engComments].sort((a, b) => {
+  // Extract task notes from all engagements — flatten to comment-shaped objects
+  const taskNotes = engagements.flatMap(eng =>
+    STAGE_ORDER.flatMap(stageKey => {
+      const tasks = eng.stageTasks?.[stageKey] || [];
+      return tasks.flatMap(task =>
+        (task.notes || []).map(n => ({
+          id: `tasknote-${eng.id}-${stageKey}-${task.title}-${n.at}`,
+          text: n.text,
+          authorName: n.authorName || null,
+          authorPhoto: n.authorPhoto || null,
+          authorRole: null,
+          tag: null,
+          external: false,
+          stage: stageKey,
+          engagementId: eng.id,
+          engagementName: eng.customer,
+          taskTitle: task.title,
+          _source: "task",
+          // Normalise timestamp so sorting works
+          createdAt: { toMillis: () => new Date(n.at).getTime() },
+        }))
+      );
+    })
+  );
+
+  const customerNotes   = activityEntries.map(e => ({ ...e, _source: "customer", engagementName: null }));
+  const engComments     = engagementComments.map(e => ({ ...e, _source: "engagement" }));
+  const allComments     = [...customerNotes, ...engComments, ...taskNotes].sort((a, b) => {
     const ta = a.createdAt?.toMillis?.() || new Date(a.createdAt || 0).getTime();
     const tb = b.createdAt?.toMillis?.() || new Date(b.createdAt || 0).getTime();
     return tb - ta;
@@ -981,6 +1006,7 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
         <CommentaryTab
           activityEntries={activityEntries}
           engagementComments={engagementComments}
+          engagements={engagements}
         />
       )}
 

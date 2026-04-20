@@ -426,15 +426,33 @@ export function CommentRolePill({ role, style }) {
 }
 
 export function CommentEntry({ entry: e, showEngagement = false }) {
-  const ts = e.createdAt?.toDate ? e.createdAt.toDate() : new Date(e.createdAt || 0);
+  const ts = e.createdAt?.toDate ? e.createdAt.toDate()
+           : e.createdAt?.toMillis ? new Date(e.createdAt.toMillis())
+           : new Date(e.createdAt || 0);
   const stageDef = e.stage ? (STAGE_LABELS[e.stage] || e.stage) : null;
+  const isTaskNote = e._source === "task";
   return (
     <div style={{ display:"flex", gap:10, padding:"12px 0", borderBottom:"1px solid var(--border)" }}>
-      <Avatar name={e.authorName} photoURL={e.authorPhoto} size={28} style={{ flexShrink:0, marginTop:2 }} />
+      {e.authorPhoto
+        ? <img src={e.authorPhoto} style={{ width:28, height:28, borderRadius:"50%", flexShrink:0, marginTop:2, objectFit:"cover" }} alt="" />
+        : <Avatar name={e.authorName || (isTaskNote ? "Task note" : "?")} size={28} style={{ flexShrink:0, marginTop:2 }} />
+      }
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:4 }}>
-          <span style={{ fontSize:12, fontWeight:600, color:"var(--text-primary)" }}>{e.authorName}</span>
-          <CommentRolePill role={e.authorRole} />
+          {isTaskNote ? (
+            <span style={{ fontSize:12, fontWeight:600, color:"var(--text-muted)", fontStyle:"italic" }}>
+              {e.authorName || "Task note"}
+            </span>
+          ) : (
+            <span style={{ fontSize:12, fontWeight:600, color:"var(--text-primary)" }}>{e.authorName}</span>
+          )}
+          {e.authorRole && <CommentRolePill role={e.authorRole} />}
+          {isTaskNote && (
+            <span style={{ fontSize:10, fontWeight:600, padding:"1px 7px", borderRadius:999,
+              background:"rgba(255,255,255,0.06)", color:"var(--text-muted)", flexShrink:0 }}>
+              📝 Task note
+            </span>
+          )}
           {e.tag && <CommentTagPill tagKey={e.tag} />}
           {e.external && (
             <span style={{ fontSize:10, fontWeight:600, padding:"1px 7px", borderRadius:999,
@@ -446,8 +464,9 @@ export function CommentEntry({ entry: e, showEngagement = false }) {
             {ts.toLocaleDateString("en-GB", { day:"numeric", month:"short" })} {ts.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" })}
           </span>
         </div>
-        {(showEngagement || stageDef) && (
-          <div style={{ display:"flex", gap:6, marginBottom:5, flexWrap:"wrap" }}>
+        {/* Context pills — engagement, stage, task title */}
+        {(showEngagement || stageDef || e.taskTitle) && (
+          <div style={{ display:"flex", gap:5, marginBottom:5, flexWrap:"wrap" }}>
             {showEngagement && e.engagementName && (
               <span style={{ fontSize:10, color:"var(--text-muted)", background:"var(--surface2)", padding:"1px 7px", borderRadius:999 }}>
                 📋 {e.engagementName}
@@ -456,6 +475,11 @@ export function CommentEntry({ entry: e, showEngagement = false }) {
             {stageDef && (
               <span style={{ fontSize:10, color:"var(--text-muted)", background:"var(--surface2)", padding:"1px 7px", borderRadius:999 }}>
                 🔵 {stageDef}
+              </span>
+            )}
+            {e.taskTitle && (
+              <span style={{ fontSize:10, color:"var(--text-muted)", background:"var(--surface2)", padding:"1px 7px", borderRadius:999 }}>
+                ✓ {e.taskTitle}
               </span>
             )}
           </div>
