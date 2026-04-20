@@ -764,6 +764,23 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
     setSaving(false);
   }
 
+  // Write an audit entry to the parent customer's audit subcollection
+  async function writeAuditEntry(text) {
+    if (!engagement.customerId) return;
+    try {
+      await addDoc(collection(db, "customers", engagement.customerId, "audit"), {
+        text,
+        authorName:     user?.displayName || "System",
+        authorUid:      user?.uid || null,
+        engagementId:   engagement.id,
+        engagementName: engagement.customer,
+        stage:          engagement.currentStage,
+        createdAt:      serverTimestamp(),
+        _source:        "audit",
+      });
+    } catch {}
+  }
+
   async function updateTask(stageKey, taskIdx, updates) {
     const tasks = [...(engagement.stageTasks?.[stageKey] || [])];
     tasks[taskIdx] = { ...tasks[taskIdx], ...updates };
@@ -852,6 +869,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
       }
     }
     await save(updates);
+    await writeAuditEntry(`Stage advanced: ${STAGE_LABELS[engagement.currentStage] || engagement.currentStage} → ${STAGE_LABELS[nextKey] || nextKey}`);
     setActiveStage(nextKey);
   }
 

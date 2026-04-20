@@ -257,12 +257,36 @@ export default function EngagementModal({ open, onClose, initial, users, custome
     upd(field, arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]);
   };
 
+  const AUDIT_FIELDS = {
+    ragStatus: "RAG status", currentStage: "Stage",
+    cseEmail: "CSE", csmEmail: "CSM", aeEmail: "AE",
+    arr: "ARR", planType: "Plan type",
+  };
+
+  async function writeEngagementAudit(customerId, engagementName, text) {
+    if (!customerId) return;
+    try {
+      await addDoc(collection(db, "customers", customerId, "audit"), {
+        text, authorName: user?.displayName || "System", authorUid: user?.uid || null,
+        engagementName, _source: "audit", createdAt: serverTimestamp(),
+      });
+    } catch {}
+  }
+
   async function handleSave() {
     if (!form.customer.trim()) return;
     setSaving(true);
     try {
       if (isEdit) {
         await updateDoc(doc(db, "engagements", initial.id), { ...form, updatedAt: serverTimestamp() });
+        // Audit changed fields
+        const changed = Object.keys(AUDIT_FIELDS).filter(
+          k => String(form[k] || "") !== String(initial[k] || "")
+        );
+        if (changed.length > 0 && form.customerId) {
+          const summary = changed.map(k => `${AUDIT_FIELDS[k]}: ${initial[k] || "—"} → ${form[k] || "—"}`).join(", ");
+          await writeEngagementAudit(form.customerId, form.customer, `Engagement updated: ${summary}`);
+        }
       } else {
         // Build default tasks and pre-assign CSE email to CSE-owned tasks
         const stageTasks = buildAllStageTasks(todayIso(), form.planType);
@@ -279,6 +303,9 @@ export default function EngagementModal({ open, onClose, initial, users, custome
           ...form, stageTasks, createdBy: user.uid,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
         });
+        if (form.customerId) {
+          await writeEngagementAudit(form.customerId, form.customer, `Engagement created: ${form.planType || "Onboarding"} plan`);
+        }
       }
       onClose();
     } catch (err) {

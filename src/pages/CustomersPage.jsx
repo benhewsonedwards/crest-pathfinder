@@ -182,20 +182,51 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
     setDeleting(false);
   }
 
+  async function writeAuditEntry(customerId, text) {
+    try {
+      await addDoc(collection(db, "customers", customerId, "audit"), {
+        text,
+        authorName: user?.displayName || "System",
+        authorUid:  user?.uid || null,
+        createdAt:  serverTimestamp(),
+        _source:    "audit",
+      });
+    } catch {}
+  }
+
+  const AUDIT_FIELD_LABELS = {
+    renewalDate: "Renewal date", renewalARR: "Renewal ARR", renewalStatus: "Renewal status",
+    arr: "ARR", csmEmail: "CSM", aeEmail: "AE", comEmail: "COM",
+    subscription: "Subscription", segment: "Segment", region: "Region",
+  };
+
   async function saveCustomer() {
     if (!form.name.trim()) return;
     setSaving(true);
     if (editTarget?.id) {
+      // Detect changed fields for audit log
+      const changedFields = Object.keys(AUDIT_FIELD_LABELS).filter(
+        k => String(form[k] || "") !== String(editTarget[k] || "")
+      );
       await updateDoc(doc(db, "customers", editTarget.id), {
         ...form, updatedAt: serverTimestamp(),
       });
+      if (changedFields.length > 0) {
+        const summary = changedFields.map(k => {
+          const label = AUDIT_FIELD_LABELS[k];
+          const oldVal = editTarget[k] || "—";
+          const newVal = form[k] || "—";
+          return `${label}: ${oldVal} → ${newVal}`;
+        }).join(", ");
+        await writeAuditEntry(editTarget.id, `Updated: ${summary}`);
+      }
       closeModal();
     } else {
       const ref = await addDoc(collection(db, "customers"), {
         ...form, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       });
+      await writeAuditEntry(ref.id, `Customer record created`);
       closeModal();
-      // Prompt to create first engagement
       setNewCustomerPrompt({ id: ref.id, name: form.name });
     }
     setSaving(false);

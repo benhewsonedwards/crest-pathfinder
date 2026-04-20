@@ -48,6 +48,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ─── /customers/audit ─────────────────────────────────────────────────────
+    // System audit trail — written by team members, read-only to all viewers
+    match /customers/{customerId}/audit/{auditId} {
+      allow read:   if isViewer();
+      allow create: if isTeamMember();
+      allow update: if false; // immutable
+      allow delete: if isAdmin();
+    }
+
     // ─── /integrations ────────────────────────────────────────────────────────
     match /integrations/{integrationId} {
       allow read:   if isViewer()

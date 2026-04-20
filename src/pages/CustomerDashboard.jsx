@@ -307,10 +307,22 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
 }
 
 // ─── Commentary tab component ─────────────────────────────────────────────────
-function CommentaryTab({ activityEntries, engagementComments, engagements }) {
+function CommentaryTab({ activityEntries, engagementComments, engagements, onPost, user, profile }) {
   const [commView, setCommView] = useState("timeline");
   const [tagFilter, setTagFilter] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
+  const [text, setText] = useState("");
+  const [tag, setTag] = useState("");
+  const [external, setExternal] = useState(false);
+  const [posting, setPosting] = useState(false);
+
+  async function post() {
+    if (!text.trim()) return;
+    setPosting(true);
+    await onPost(text, tag || null, external);
+    setText(""); setTag(""); setExternal(false);
+    setPosting(false);
+  }
 
   const STAGE_ORDER = ["opportunity","requirements","technical-review","onboarding","solution-delivery","go-live","csm"];
 
@@ -356,6 +368,46 @@ function CommentaryTab({ activityEntries, engagementComments, engagements }) {
 
   return (
     <div>
+      {/* Composer */}
+      <div style={{ background:"var(--surface2)", borderRadius:"var(--radius)", padding:14, marginBottom:16 }}>
+        <div style={{ display:"flex", gap:10, marginBottom:10 }}>
+          {user?.photoURL
+            ? <img src={user.photoURL} style={{ width:28, height:28, borderRadius:"50%", flexShrink:0, marginTop:2, objectFit:"cover" }} alt="" />
+            : <Avatar name={user?.displayName} size={28} style={{ flexShrink:0, marginTop:2 }} />
+          }
+          <Textarea value={text} onChange={e => setText(e.target.value)}
+            placeholder="Add an account-level note, relationship context, agreed action, escalation..."
+            rows={2}
+            onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post(); }}
+          />
+        </div>
+        <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+            {COMMENT_TAGS.map(t => (
+              <button key={t.key} onClick={() => setTag(tag === t.key ? "" : t.key)} style={{
+                padding:"2px 9px", borderRadius:999, fontSize:11, fontWeight:600, cursor:"pointer",
+                border:`1px solid ${tag===t.key ? t.colour : "var(--border)"}`,
+                background:tag===t.key ? t.bg : "transparent",
+                color:tag===t.key ? t.colour : "var(--text-muted)",
+                transition:"all 0.13s",
+              }}>{t.label}</button>
+            ))}
+          </div>
+          <label style={{ display:"flex", alignItems:"center", gap:5, fontSize:12, color:"var(--text-muted)", cursor:"pointer", marginLeft:"auto" }}>
+            <input type="checkbox" checked={external} onChange={e => setExternal(e.target.checked)} style={{ accentColor:"var(--purple)" }} />
+            Communicated externally
+          </label>
+          <Btn size="sm" onClick={post} disabled={!text.trim() || posting}>
+            {posting ? "Posting..." : "Post"}
+          </Btn>
+        </div>
+        {profile?.role && (
+          <p style={{ fontSize:11, color:"var(--text-muted)", marginTop:8 }}>
+            Logged as <strong>{profile.role}</strong> · Cmd+Enter to post
+          </p>
+        )}
+      </div>
+
       {/* Controls */}
       <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
         <div style={{ display:"flex", borderRadius:8, overflow:"hidden", border:"1px solid var(--border)" }}>
@@ -467,8 +519,8 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
   const [showShareable, setShowShareable] = useState(false);
   // Activity log
   const [activityEntries, setActivityEntries] = useState([]);
-  const [activityText, setActivityText] = useState("");
-  const [postingActivity, setPostingActivity] = useState(false);
+  // Audit trail — auto-written system events
+  const [auditEntries, setAuditEntries] = useState([]);
   // Commentary — engagement-level comments across all linked engagements
   const [engagementComments, setEngagementComments] = useState([]); // flat array from all engagements
 
@@ -494,12 +546,17 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
         return [...prev, ...newOnes];
       })
     );
-    // Customer activity log
+    // Customer activity log (manual commentary)
     const u4 = onSnapshot(
       query(collection(db, "customers", customer.id, "activity"), orderBy("createdAt", "desc")),
       s => setActivityEntries(s.docs.map(d => ({ id: d.id, ...d.data() })))
     );
-    return () => { u1(); u2(); u3(); u4(); };
+    // Audit trail (system-written events)
+    const u5 = onSnapshot(
+      query(collection(db, "customers", customer.id, "audit"), orderBy("createdAt", "desc")),
+      s => setAuditEntries(s.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    return () => { u1(); u2(); u3(); u4(); u5(); };
   }, [customer?.id, customer?.name]);
 
   // Subscribe to engagement-level comments for all linked engagements
@@ -520,18 +577,19 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
     return () => unsubs.forEach(u => u());
   }, [engagements.map(e => e.id).join(",")]); // re-subscribe when engagement list changes
 
-  async function postActivity() {
-    if (!activityText.trim() || !user) return;
-    setPostingActivity(true);
+  async function postActivity(text, tag = null, external = false) {
+    if (!text?.trim() || !user) return;
     await addDoc(collection(db, "customers", customer.id, "activity"), {
-      text: activityText.trim(),
-      authorName: user.displayName,
+      text:        text.trim(),
+      authorName:  user.displayName,
       authorPhoto: user.photoURL,
-      authorUid: user.uid,
-      createdAt: serverTimestamp(),
+      authorUid:   user.uid,
+      authorRole:  profile?.role || null,
+      tag:         tag || null,
+      external:    external,
+      _source:     "customer",
+      createdAt:   serverTimestamp(),
     });
-    setActivityText("");
-    setPostingActivity(false);
   }
 
   // Ticket stats
@@ -1007,75 +1065,66 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
           activityEntries={activityEntries}
           engagementComments={engagementComments}
           engagements={engagements}
+          onPost={postActivity}
+          user={user}
+          profile={profile}
         />
       )}
 
-      {/* ── ACTIVITY LOG ── */}
+      {/* ── ACTIVITY LOG (audit trail) ── */}
       {tab === "activity" && (
         <div>
-          {/* New entry composer */}
-          <Card style={{ marginBottom: 14 }}>
-            <div style={{ padding: "14px 18px" }}>
-              <Label style={{ marginBottom: 8, display: "block" }}>Add note</Label>
-              <Textarea
-                value={activityText}
-                onChange={e => setActivityText(e.target.value)}
-                placeholder="Account notes, relationship context, renewal signals, product feedback, exec conversations..."
-                rows={3}
-                style={{ marginBottom: 10 }}
-                onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postActivity(); }}
-              />
-              <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                <Btn onClick={postActivity} disabled={!activityText.trim() || postingActivity} size="sm">
-                  {postingActivity ? "Posting..." : "Add note"}
-                </Btn>
-              </div>
-            </div>
-          </Card>
-
-          {/* Entry list */}
-          {activityEntries.length === 0 ? (
-            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
-              <p style={{ fontSize: 32, marginBottom: 8 }}>📝</p>
-              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>No notes yet</p>
-              <p style={{ fontSize: 13 }}>Use this log for account notes, renewal signals, exec conversations, and anything that doesn't belong on a specific task.</p>
-            </div>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 16 }}>
+            Automatic record of field changes, stage advances, and system events. Not editable.
+          </p>
+          {auditEntries.length === 0 ? (
+            <Card style={{ padding: "32px 20px", textAlign: "center" }}>
+              <p style={{ fontSize: 28, marginBottom: 8 }}>🔍</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>No audit events yet</p>
+              <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+                Events are recorded automatically when fields change, stages advance, or records are created.
+              </p>
+            </Card>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {activityEntries.map(entry => {
+            <Card style={{ padding: "0 20px" }}>
+              {auditEntries.map((entry, i) => {
                 const ts = entry.createdAt?.toDate ? entry.createdAt.toDate() : new Date(entry.createdAt || 0);
                 return (
-                  <Card key={entry.id} style={{ padding: "14px 18px" }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                      {/* Avatar */}
-                      <div style={{
-                        width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
-                        background: "var(--purple-light)", display: "flex", alignItems: "center",
-                        justifyContent: "center", overflow: "hidden",
-                      }}>
-                        {entry.authorPhoto
-                          ? <img src={entry.authorPhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
-                          : <span style={{ fontSize: 11, fontWeight: 700, color: "var(--purple)" }}>
-                              {entry.authorName?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
-                            </span>
-                        }
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
-                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{entry.authorName}</span>
-                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                            {ts.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-                            {" · "}
-                            {ts.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                        <p style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{entry.text}</p>
-                      </div>
+                  <div key={entry.id} style={{
+                    display: "flex", gap: 12, padding: "12px 0",
+                    borderBottom: i < auditEntries.length - 1 ? "1px solid var(--border)" : "none",
+                    alignItems: "flex-start",
+                  }}>
+                    {/* System icon or user avatar */}
+                    <div style={{
+                      width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                      background: "var(--surface2)", border: "1px solid var(--border)",
+                      display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12,
+                    }}>
+                      {entry.authorName === "System" ? "⚙" : (entry.authorName?.[0] || "?")}
                     </div>
-                  </Card>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-second)" }}>
+                          {entry.authorName || "System"}
+                        </span>
+                        {entry.engagementName && (
+                          <span style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--surface2)", padding: "1px 7px", borderRadius: 999 }}>
+                            📋 {entry.engagementName}
+                          </span>
+                        )}
+                        <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
+                          {ts.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {" · "}
+                          {ts.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                      </div>
+                      <p style={{ fontSize: 13, color: "var(--text-muted)", lineHeight: 1.5 }}>{entry.text}</p>
+                    </div>
+                  </div>
                 );
               })}
-            </div>
+            </Card>
           )}
         </div>
       )}
