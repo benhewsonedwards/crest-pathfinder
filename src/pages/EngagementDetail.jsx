@@ -465,6 +465,7 @@ function isCallTask(title) { return CALL_KEYWORDS.some(k => title?.toLowerCase()
 
 function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users }) {
   return (
+    <>
     <div style={{
       display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 56px 28px 28px 28px",
       gap: 8, padding: "9px 16px", borderBottom: "1px solid var(--border)",
@@ -544,11 +545,64 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
         onMouseEnter={e => { if (!task.locked) e.currentTarget.style.color = "var(--purple)"; }}
         onMouseLeave={e => { if (!task.locked) e.currentTarget.style.color = "var(--text-muted)"; }}
       >{task.locked ? "🔒" : "🔓"}</button>
+      {/* Customer activity indicator */}
+      {(() => {
+        const noteCount = (task.customerNotes || []).length;
+        const fileCount = (task.customerFiles || []).length;
+        const total = noteCount + fileCount;
+        if ((task.owner !== "customer" && task.ownerRole !== "customer") || total === 0) return null;
+        return (
+          <button
+            onClick={() => onUpdate({ _showCustomerActivity: !task._showCustomerActivity })}
+            title={`${noteCount} note${noteCount !== 1 ? "s" : ""}, ${fileCount} file${fileCount !== 1 ? "s" : ""} from customer`}
+            style={{
+              background: "rgba(101,89,255,0.12)", border: "1px solid rgba(101,89,255,0.3)",
+              borderRadius: 6, cursor: "pointer", fontSize: 10, fontWeight: 700,
+              padding: "2px 6px", color: "var(--purple)", display: "flex", alignItems: "center", gap: 3,
+            }}
+          >
+            💬 {total}
+          </button>
+        );
+      })()}
       <button onClick={onDelete} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 13, padding: 2 }}
         onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
         onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
       >✕</button>
     </div>
+    {/* Customer notes + files — shown when badge is clicked */}
+    {(task.owner === "customer" || task.ownerRole === "customer") && task._showCustomerActivity && (
+      <div style={{
+        margin: "0 16px 10px", padding: "12px 14px",
+        background: "rgba(101,89,255,0.06)", border: "1px solid rgba(101,89,255,0.15)",
+        borderRadius: 8,
+      }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--purple)", marginBottom: 8 }}>
+          Customer activity
+        </p>
+        {(task.customerNotes || []).length === 0 && (task.customerFiles || []).length === 0 && (
+          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No notes or files yet.</p>
+        )}
+        {(task.customerNotes || []).map((n, i) => (
+          <div key={i} style={{ fontSize: 12, color: "var(--text-second)", background: "var(--surface2)", borderLeft: "3px solid var(--purple)", padding: "6px 10px", borderRadius: "0 6px 6px 0", marginBottom: 6 }}>
+            <p style={{ margin: 0 }}>{n.text}</p>
+            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "3px 0 0" }}>
+              {new Date(n.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+            </p>
+          </div>
+        ))}
+        {(task.customerFiles || []).map((f, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 4 }}>
+            <span>📎</span>
+            <a href={f.url} target="_blank" rel="noreferrer" style={{ color: "var(--purple)" }}>{f.name}</a>
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
+              {new Date(f.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+            </span>
+          </div>
+        ))}
+      </div>
+    )}
+    </>
   );
 }
 

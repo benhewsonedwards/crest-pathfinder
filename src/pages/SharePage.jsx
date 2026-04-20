@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { doc, getDoc, collection, query, where, getDocs, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, getDocs, updateDoc } from "firebase/firestore";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "../lib/firebase";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, TASK_TEMPLATES, stageColour, fmtDate } from "../lib/constants";
@@ -81,7 +81,8 @@ function CustomerTaskRow({ task, stageKey, engagementId, taskIndex, onUpdate }) 
 
   async function markDone() {
     setSaving(true);
-    await onUpdate(taskIndex, stageKey, { done: true, doneAt: new Date().toISOString() });
+    const updates = { done: true, doneAt: new Date().toISOString() };
+    await onUpdate(taskIndex, stageKey, updates);
     setSaving(false);
   }
 
@@ -89,9 +90,8 @@ function CustomerTaskRow({ task, stageKey, engagementId, taskIndex, onUpdate }) 
     if (!note.trim()) return;
     setSaving(true);
     const entry = { text: note.trim(), at: new Date().toISOString() };
-    await onUpdate(taskIndex, stageKey, {
-      customerNotes: arrayUnion ? [...(task.customerNotes || []), entry] : [entry],
-    });
+    const updatedNotes = [...(task.customerNotes || []), entry];
+    await onUpdate(taskIndex, stageKey, { customerNotes: updatedNotes });
     setNote("");
     setSaving(false);
     setExpanded(false);
@@ -345,9 +345,11 @@ export default function SharePage({ token, customerId: legacyCustomerId }) {
     STAGE_KEYS.forEach(sk => {
       const stored = latestEngagement.stageTasks?.[sk];
       if (stored && stored.length > 0) {
-        stored
-          .filter(t => t.owner === "customer" || t.ownerRole === "customer" || t.ownerEmail === "customer")
-          .forEach((t, idx) => customerTasks.push({ task: t, stageKey: sk, taskIndex: idx }));
+        stored.forEach((t, realIdx) => {
+          if (t.owner === "customer" || t.ownerRole === "customer" || t.ownerEmail === "customer") {
+            customerTasks.push({ task: t, stageKey: sk, taskIndex: realIdx });
+          }
+        });
       } else {
         (TASK_TEMPLATES[sk] || [])
           .filter(t => t.owner === "customer")
