@@ -8,7 +8,7 @@ import {
   buildDefaultTasks, buildAllStageTasks, rippleTasks, rippleAllStages, stageEndDate,
   fmtDate, fmtDateTime, stageColour, todayIso, workingDayAdd, diffDays
 } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
+import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner, COMMENT_TAGS, STAGE_LABELS, CommentTagPill, CommentRolePill, CommentEntry } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 import { personByEmail, PEOPLE, taskAssigneesForStage } from "../lib/people";
 import EngagementModal from "../components/EngagementModal";
@@ -648,11 +648,13 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
 }
 
 
-// ─── Activity log ─────────────────────────────────────────────────────────────
-function ActivityLog({ engagementId }) {
-  const { user } = useAuth();
+// ─── Activity / Comment log ────────────────────────────────────────────────────
+function ActivityLog({ engagementId, currentStage, engagementName }) {
+  const { user, profile } = useAuth();
   const [entries, setEntries] = useState([]);
   const [text, setText] = useState("");
+  const [tag, setTag] = useState("");
+  const [external, setExternal] = useState(false);
   const [posting, setPosting] = useState(false);
 
   useEffect(() => {
@@ -664,42 +666,65 @@ function ActivityLog({ engagementId }) {
     if (!text.trim()) return;
     setPosting(true);
     await addDoc(collection(db, "engagements", engagementId, "activity"), {
-      text: text.trim(), authorName: user.displayName, authorPhoto: user.photoURL,
-      authorUid: user.uid, createdAt: serverTimestamp(),
+      text:          text.trim(),
+      authorName:    user.displayName,
+      authorPhoto:   user.photoURL,
+      authorUid:     user.uid,
+      authorRole:    profile?.role || null,
+      tag:           tag || null,
+      external:      external,
+      stage:         currentStage || null,
+      engagementId,
+      engagementName: engagementName || null,
+      createdAt:     serverTimestamp(),
     });
-    setText("");
+    setText(""); setTag(""); setExternal(false);
     setPosting(false);
   }
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        <Avatar name={user?.displayName} photoURL={user?.photoURL} size={30} style={{ flexShrink: 0, marginTop: 2 }}/>
-        <div style={{ flex: 1 }}>
-          <Textarea value={text} onChange={e => setText(e.target.value)} placeholder="Add a note, update, or comment..." rows={2}/>
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 6 }}>
-            <Btn size="sm" onClick={post} disabled={!text.trim() || posting}>
-              {posting ? "Posting..." : "Post update"}
-            </Btn>
-          </div>
+      {/* Composer */}
+      <div style={{ background: "var(--surface2)", borderRadius: "var(--radius)", padding: 14, marginBottom: 20 }}>
+        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <Avatar name={user?.displayName} photoURL={user?.photoURL} size={28} style={{ flexShrink: 0, marginTop: 2 }} />
+          <Textarea value={text} onChange={e => setText(e.target.value)}
+            placeholder="Add a comment, agreed action, escalation, feedback..." rows={2}
+            onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) post(); }} />
         </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          {/* Tag selector */}
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {COMMENT_TAGS.map(t => (
+              <button key={t.key} onClick={() => setTag(tag === t.key ? "" : t.key)} style={{
+                padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${tag === t.key ? t.colour : "var(--border)"}`,
+                background: tag === t.key ? t.bg : "transparent",
+                color: tag === t.key ? t.colour : "var(--text-muted)",
+                transition: "all 0.13s",
+              }}>{t.label}</button>
+            ))}
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--text-muted)", cursor: "pointer", marginLeft: "auto" }}>
+            <input type="checkbox" checked={external} onChange={e => setExternal(e.target.checked)}
+              style={{ accentColor: "var(--purple)" }} />
+            Communicated externally
+          </label>
+          <Btn size="sm" onClick={post} disabled={!text.trim() || posting}>
+            {posting ? "Posting..." : "Post"}
+          </Btn>
+        </div>
+        <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
+          Logged as <strong>{profile?.role || "user"}</strong> · Stage: <strong>{currentStage || "—"}</strong> · Cmd+Enter to post
+        </p>
       </div>
+
+      {/* Entries */}
       {entries.length === 0 ? (
-        <p style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>No activity yet</p>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", textAlign: "center", padding: "16px 0" }}>No comments yet</p>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {entries.map(e => (
-            <div key={e.id} style={{ display: "flex", gap: 10 }}>
-              <Avatar name={e.authorName} photoURL={e.authorPhoto} size={28} style={{ flexShrink: 0, marginTop: 2 }}/>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600 }}>{e.authorName}</span>
-                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{fmtDateTime(e.createdAt)}</span>
-                </div>
-                <p style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{e.text}</p>
-              </div>
-            </div>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+          {entries.map(e => <CommentEntry key={e.id} entry={e} />)}
         </div>
       )}
     </div>
@@ -1071,10 +1096,10 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
       {/* Top tabs */}
       <Tabs
         tabs={[
-          { id: "overview", label: "Overview" },
-          { id: "tasks", label: "Tasks" },
-          { id: "gantt", label: "Gantt" },
-          { id: "activity", label: "Activity" },
+          { id: "overview",  label: "Overview" },
+          { id: "tasks",     label: "Tasks" },
+          { id: "gantt",     label: "Gantt" },
+          { id: "activity",  label: "Comments" },
         ]}
         active={activeTab}
         onChange={setActiveTab}
@@ -1366,7 +1391,11 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
       {/* ── ACTIVITY ── */}
       {activeTab === "activity" && (
         <Card style={{ padding: 20 }}>
-          <ActivityLog engagementId={engagement.id} />
+          <ActivityLog
+            engagementId={engagement.id}
+            currentStage={engagement.currentStage}
+            engagementName={engagement.customer}
+          />
         </Card>
       )}
 

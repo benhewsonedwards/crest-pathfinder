@@ -10,7 +10,8 @@ import { integrationStatus, ticketType, TICKET_TYPES } from "../lib/integrationC
 import {
   Card, CardHeader, Label, Pill, Avatar, Btn,
   Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner, EmptyState,
-  useToast, ToastContainer
+  useToast, ToastContainer,
+  COMMENT_TAGS, STAGE_LABELS, CommentEntry, CommentTagPill, CommentRolePill,
 } from "../components/UI";
 import IntegrationModal from "../components/IntegrationModal";
 
@@ -305,6 +306,127 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
   );
 }
 
+// ─── Commentary tab component ─────────────────────────────────────────────────
+function CommentaryTab({ activityEntries, engagementComments }) {
+  const [commView, setCommView] = useState("timeline");
+  const [tagFilter, setTagFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+
+  const STAGE_ORDER = ["opportunity","requirements","technical-review","onboarding","solution-delivery","go-live","csm"];
+
+  const customerNotes = activityEntries.map(e => ({ ...e, _source: "customer", engagementName: null }));
+  const engComments   = engagementComments.map(e => ({ ...e, _source: "engagement" }));
+  const allComments   = [...customerNotes, ...engComments].sort((a, b) => {
+    const ta = a.createdAt?.toMillis?.() || new Date(a.createdAt || 0).getTime();
+    const tb = b.createdAt?.toMillis?.() || new Date(b.createdAt || 0).getTime();
+    return tb - ta;
+  });
+
+  const filtered = allComments.filter(e =>
+    (!tagFilter  || e.tag  === tagFilter) &&
+    (!roleFilter || e.authorRole === roleFilter)
+  );
+
+  const roles = [...new Set(allComments.map(e => e.authorRole).filter(Boolean))];
+
+  return (
+    <div>
+      {/* Controls */}
+      <div style={{ display:"flex", gap:8, marginBottom:16, flexWrap:"wrap", alignItems:"center" }}>
+        <div style={{ display:"flex", borderRadius:8, overflow:"hidden", border:"1px solid var(--border)" }}>
+          {[["timeline","⏱ Timeline"],["by-engagement","📋 By engagement"]].map(([id, label]) => (
+            <button key={id} onClick={() => setCommView(id)} style={{
+              padding:"6px 14px", fontSize:12, fontWeight:commView===id?600:400, cursor:"pointer",
+              background:commView===id?"var(--purple)":"transparent",
+              color:commView===id?"white":"var(--text-second)", border:"none", fontFamily:"inherit",
+            }}>{label}</button>
+          ))}
+        </div>
+        <select value={tagFilter} onChange={e => setTagFilter(e.target.value)} style={{ fontSize:12, padding:"5px 10px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-primary)", fontFamily:"inherit", cursor:"pointer" }}>
+          <option value="">All tags</option>
+          {COMMENT_TAGS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+        </select>
+        {roles.length > 0 && (
+          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} style={{ fontSize:12, padding:"5px 10px", borderRadius:8, border:"1px solid var(--border)", background:"var(--surface)", color:"var(--text-primary)", fontFamily:"inherit", cursor:"pointer" }}>
+            <option value="">All roles</option>
+            {roles.map(r => <option key={r} value={r}>{r.toUpperCase()}</option>)}
+          </select>
+        )}
+        {(tagFilter || roleFilter) && (
+          <button onClick={() => { setTagFilter(""); setRoleFilter(""); }} style={{ fontSize:11, color:"var(--red)", background:"none", border:"1px solid var(--red)", borderRadius:999, padding:"3px 10px", cursor:"pointer", fontFamily:"inherit" }}>Clear</button>
+        )}
+        <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:"auto" }}>
+          {filtered.length} comment{filtered.length!==1?"s":""}
+        </span>
+      </div>
+
+      {filtered.length === 0 && (
+        <Card style={{ padding:"28px 20px", textAlign:"center" }}>
+          <p style={{ fontSize:32, marginBottom:8 }}>💬</p>
+          <p style={{ fontSize:14, fontWeight:600, color:"var(--text-primary)", marginBottom:4 }}>No comments yet</p>
+          <p style={{ fontSize:13, color:"var(--text-muted)" }}>Comments from engagements and account-level notes will appear here.</p>
+        </Card>
+      )}
+
+      {/* Timeline */}
+      {commView === "timeline" && filtered.length > 0 && (
+        <Card style={{ padding:"0 20px" }}>
+          {filtered.map(e => <CommentEntry key={e.id+(e._engagementId||"")} entry={e} showEngagement={true} />)}
+        </Card>
+      )}
+
+      {/* By engagement */}
+      {commView === "by-engagement" && filtered.length > 0 && (() => {
+        const customerLevel = filtered.filter(e => e._source === "customer");
+        const byEng = {};
+        filtered.filter(e => e._source === "engagement").forEach(e => {
+          const key = e._engagementId || "unknown";
+          if (!byEng[key]) byEng[key] = { name: e.engagementName || key, stages: {} };
+          const stage = e.stage || "unknown";
+          if (!byEng[key].stages[stage]) byEng[key].stages[stage] = [];
+          byEng[key].stages[stage].push(e);
+        });
+        return (
+          <div>
+            {customerLevel.length > 0 && (
+              <div style={{ marginBottom:12, border:"1px solid var(--border)", borderRadius:"var(--radius)", overflow:"hidden" }}>
+                <div style={{ padding:"10px 18px", background:"var(--surface2)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"var(--text-primary)" }}>🏢 Account-level notes</span>
+                  <span style={{ fontSize:11, color:"var(--text-muted)" }}>{customerLevel.length} note{customerLevel.length!==1?"s":""}</span>
+                </div>
+                <div style={{ padding:"0 18px" }}>
+                  {customerLevel.map(e => <CommentEntry key={e.id} entry={e} showEngagement={false} />)}
+                </div>
+              </div>
+            )}
+            {Object.entries(byEng).map(([engId, eng]) => (
+              <div key={engId} style={{ marginBottom:12, border:"1px solid var(--border)", borderRadius:"var(--radius)", overflow:"hidden" }}>
+                <div style={{ padding:"10px 18px", background:"var(--surface2)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:8 }}>
+                  <span style={{ fontSize:13, fontWeight:600, color:"var(--purple)" }}>📋 {eng.name}</span>
+                  <span style={{ fontSize:11, color:"var(--text-muted)" }}>{Object.values(eng.stages).flat().length} comment{Object.values(eng.stages).flat().length!==1?"s":""}</span>
+                </div>
+                {[...STAGE_ORDER, "unknown"].filter(s => eng.stages[s]?.length).map(stage => (
+                  <div key={stage}>
+                    <div style={{ padding:"6px 18px", background:"var(--surface)", borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:10, fontWeight:700, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.06em" }}>
+                        🔵 {STAGE_LABELS[stage] || stage}
+                      </span>
+                      <span style={{ fontSize:10, color:"var(--text-muted)" }}>· {eng.stages[stage].length}</span>
+                    </div>
+                    <div style={{ padding:"0 18px" }}>
+                      {eng.stages[stage].map(e => <CommentEntry key={e.id} entry={e} showEngagement={false} />)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 // ─── Main customer dashboard ──────────────────────────────────────────────────
 export default function CustomerDashboard({ customer, onBack, users, onEditCustomer, onSelectEngagement }) {
   const { user, profile } = useAuth();
@@ -322,6 +444,8 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
   const [activityEntries, setActivityEntries] = useState([]);
   const [activityText, setActivityText] = useState("");
   const [postingActivity, setPostingActivity] = useState(false);
+  // Commentary — engagement-level comments across all linked engagements
+  const [engagementComments, setEngagementComments] = useState([]); // flat array from all engagements
 
   const canEdit = ["super_admin", "admin", "cse"].includes(profile?.role);
   const { toasts, toast } = useToast();
@@ -352,6 +476,24 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
     );
     return () => { u1(); u2(); u3(); u4(); };
   }, [customer?.id, customer?.name]);
+
+  // Subscribe to engagement-level comments for all linked engagements
+  useEffect(() => {
+    if (!engagements.length) { setEngagementComments([]); return; }
+    const unsubs = engagements.map(eng =>
+      onSnapshot(
+        query(collection(db, "engagements", eng.id, "activity"), orderBy("createdAt", "desc")),
+        snap => {
+          const entries = snap.docs.map(d => ({ id: d.id, ...d.data(), _engagementId: eng.id }));
+          setEngagementComments(prev => {
+            const filtered = prev.filter(e => e._engagementId !== eng.id);
+            return [...filtered, ...entries];
+          });
+        }
+      )
+    );
+    return () => unsubs.forEach(u => u());
+  }, [engagements.map(e => e.id).join(",")]); // re-subscribe when engagement list changes
 
   async function postActivity() {
     if (!activityText.trim() || !user) return;
@@ -480,6 +622,7 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
         { id: "integrations", label: "Integrations", badge: integrations.length || null },
         { id: "tickets",      label: "Request history", badge: openTickets.length || null },
         { id: "engagements",  label: "Engagements", badge: engagements.length || null },
+        { id: "commentary",   label: "Commentary" },
         { id: "activity",     label: "Activity log" },
       ]} active={tab} onChange={setTab} style={{ marginBottom: 18 }} />
 
@@ -831,6 +974,14 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
             </Card>
           )}
         </div>
+      )}
+
+      {/* ── COMMENTARY ── */}
+      {tab === "commentary" && (
+        <CommentaryTab
+          activityEntries={activityEntries}
+          engagementComments={engagementComments}
+        />
       )}
 
       {/* ── ACTIVITY LOG ── */}

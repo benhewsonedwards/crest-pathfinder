@@ -375,3 +375,93 @@ export function ToastContainer({ toasts }) {
     </div>
   );
 }
+
+// ─── Comment system shared components ────────────────────────────────────────
+export const COMMENT_TAGS = [
+  { key: "agreed",     label: "Agreed",     colour: "#00C853", bg: "rgba(0,200,83,0.12)"   },
+  { key: "escalation", label: "Escalation", colour: "#FF4444", bg: "rgba(255,68,68,0.12)"  },
+  { key: "feedback",   label: "Feedback",   colour: "#6559FF", bg: "rgba(101,89,255,0.12)" },
+  { key: "commercial", label: "Commercial", colour: "#FFB300", bg: "rgba(255,179,0,0.12)"  },
+  { key: "risk",       label: "Risk",       colour: "#FF7043", bg: "rgba(255,112,67,0.12)" },
+  { key: "update",     label: "Update",     colour: "#00D1FF", bg: "rgba(0,209,255,0.12)"  },
+];
+
+export const STAGE_LABELS = {
+  opportunity: "Opportunity", requirements: "Requirements",
+  "technical-review": "Technical Review", onboarding: "Onboarding",
+  "solution-delivery": "Solution Delivery", "go-live": "Go-Live", csm: "Ongoing CSM",
+};
+
+export const ROLE_COLOURS = {
+  super_admin: { c: "#B2ACFF", bg: "rgba(101,89,255,0.12)" },
+  admin:       { c: "#B2ACFF", bg: "rgba(101,89,255,0.12)" },
+  cse:         { c: "#00D1FF", bg: "rgba(0,209,255,0.12)"  },
+  csm:         { c: "#00C853", bg: "rgba(0,200,83,0.12)"   },
+  com:         { c: "#FFB300", bg: "rgba(255,179,0,0.12)"  },
+  ae:          { c: "#FF7043", bg: "rgba(255,112,67,0.12)" },
+  ta:          { c: "#AB47BC", bg: "rgba(171,71,188,0.12)" },
+};
+
+export function CommentTagPill({ tagKey, style }) {
+  const t = COMMENT_TAGS.find(t => t.key === tagKey);
+  if (!t) return null;
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", padding:"1px 7px", borderRadius:999,
+      fontSize:10, fontWeight:700, background:t.bg, color:t.colour, flexShrink:0, ...style }}>
+      {t.label}
+    </span>
+  );
+}
+
+export function CommentRolePill({ role, style }) {
+  if (!role) return null;
+  const col = ROLE_COLOURS[role] || { c:"var(--text-muted)", bg:"rgba(255,255,255,0.06)" };
+  return (
+    <span style={{ display:"inline-flex", alignItems:"center", padding:"1px 7px", borderRadius:999,
+      fontSize:10, fontWeight:700, background:col.bg, color:col.c, flexShrink:0,
+      textTransform:"uppercase", letterSpacing:"0.05em", ...style }}>
+      {role}
+    </span>
+  );
+}
+
+export function CommentEntry({ entry: e, showEngagement = false }) {
+  const ts = e.createdAt?.toDate ? e.createdAt.toDate() : new Date(e.createdAt || 0);
+  const stageDef = e.stage ? (STAGE_LABELS[e.stage] || e.stage) : null;
+  return (
+    <div style={{ display:"flex", gap:10, padding:"12px 0", borderBottom:"1px solid var(--border)" }}>
+      <Avatar name={e.authorName} photoURL={e.authorPhoto} size={28} style={{ flexShrink:0, marginTop:2 }} />
+      <div style={{ flex:1, minWidth:0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:6, flexWrap:"wrap", marginBottom:4 }}>
+          <span style={{ fontSize:12, fontWeight:600, color:"var(--text-primary)" }}>{e.authorName}</span>
+          <CommentRolePill role={e.authorRole} />
+          {e.tag && <CommentTagPill tagKey={e.tag} />}
+          {e.external && (
+            <span style={{ fontSize:10, fontWeight:600, padding:"1px 7px", borderRadius:999,
+              background:"rgba(0,209,255,0.1)", color:"var(--blue)", flexShrink:0 }}>
+              📤 External
+            </span>
+          )}
+          <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:"auto" }}>
+            {ts.toLocaleDateString("en-GB", { day:"numeric", month:"short" })} {ts.toLocaleTimeString("en-GB", { hour:"2-digit", minute:"2-digit" })}
+          </span>
+        </div>
+        {(showEngagement || stageDef) && (
+          <div style={{ display:"flex", gap:6, marginBottom:5, flexWrap:"wrap" }}>
+            {showEngagement && e.engagementName && (
+              <span style={{ fontSize:10, color:"var(--text-muted)", background:"var(--surface2)", padding:"1px 7px", borderRadius:999 }}>
+                📋 {e.engagementName}
+              </span>
+            )}
+            {stageDef && (
+              <span style={{ fontSize:10, color:"var(--text-muted)", background:"var(--surface2)", padding:"1px 7px", borderRadius:999 }}>
+                🔵 {stageDef}
+              </span>
+            )}
+          </div>
+        )}
+        <p style={{ fontSize:13, color:"var(--text-second)", lineHeight:1.6, whiteSpace:"pre-wrap" }}>{e.text}</p>
+      </div>
+    </div>
+  );
+}
