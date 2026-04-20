@@ -85,25 +85,33 @@ export const TASK_TEMPLATES = {
   requirements: [
     { title: "Kickoff / introductory call",        owner: "ae",  durationDays: 2, required: true  },
     { title: "Requirements scoping session",       owner: "cse", durationDays: 3, required: true  },
+    { title: "IT & technical contacts captured",   owner: "cse", durationDays: 1, required: true  },
+    // ^ Framework finding: capturing IdP admin, API token holder, developer contact
+    //   was a repeated gap across 92 engagements that caused downstream delays
     { title: "Integration requirements review",    owner: "ta",  durationDays: 3, required: false },
-    { title: "T-shirt size agreed",                owner: "admin", durationDays: 1, required: true },
+    { title: "T-shirt size agreed",                owner: "cse", durationDays: 1, required: true  },
     { title: "Scope document issued to customer",  owner: "cse", durationDays: 2, required: true  },
     { title: "Customer scope sign-off",            owner: "customer", durationDays: 5, required: true,
-      customerNote: "Please review the scope document sent by your SafetyCulture CSE and confirm you're happy to proceed. Reply to your CSE or sign off via email." },
+      customerNote: "Please review the scope document sent by your SafetyCulture CSE and confirm you're happy to proceed. This includes confirming the integration approach, go-live target date, and the IT contacts who will need to be involved. Reply to your CSE or sign off via email." },
   ],
   "technical-review": [
-    { title: "Pre-call technical questionnaire sent", owner: "cse", durationDays: 1, required: true  },
-    { title: "Right attendees confirmed",             owner: "cse", durationDays: 1, required: true  },
-    { title: "Session 1 — Discovery",                 owner: "cse", durationDays: 3, required: true  },
-    { title: "Solution design document",              owner: "cse", durationDays: 5, required: true  },
-    { title: "API / integration feasibility (TA)",    owner: "ta",  durationDays: 3, required: false },
-    { title: "Internal technical review",             owner: "admin", durationDays: 2, required: true },
-    { title: "Solution approval — customer",          owner: "customer", durationDays: 5, required: true,
-      customerNote: "Your SafetyCulture team has designed a technical solution for your integration. Please review and confirm approval so build work can begin. Your CSE will walk you through the design on a call." },
+    // Framework: questionnaire must go out 48h before — prevents first session becoming discovery with no output
+    { title: "Technical questionnaire sent (48h before)",  owner: "cse", durationDays: 1, required: true  },
+    { title: "Right attendees confirmed",                  owner: "cse", durationDays: 1, required: true  },
+    { title: "Session 1 — Technical discovery",            owner: "cse", durationDays: 3, required: true  },
+    { title: "Session 2 — Solution design",                owner: "cse", durationDays: 3, required: false },
+    { title: "API / integration feasibility review (TA)",  owner: "ta",  durationDays: 3, required: false },
+    { title: "Solution design document",                   owner: "cse", durationDays: 5, required: true  },
+    { title: "Internal technical review",                  owner: "cse", durationDays: 2, required: true  },
+    { title: "Solution approval — customer",               owner: "customer", durationDays: 5, required: true,
+      customerNote: "Your SafetyCulture team has designed a technical solution for your integration. Please review and confirm approval so build work can begin. Your CSE will walk you through the design on a call — please ensure your IT contact and integration owner can attend." },
   ],
   onboarding: [
     { title: "Kickoff call completed",           owner: "com", durationDays: 1, required: true  },
-    { title: "Recap email sent (within 24h)",    owner: "com", durationDays: 1, required: true  },
+    // Recap email is part of kickoff — not a sequential task. Target: within 24h of call.
+    { title: "Recap & next steps email sent",    owner: "com", durationDays: 1, required: true  },
+    { title: "Stakeholder map confirmed",        owner: "com", durationDays: 1, required: true  },
+    // ^ Framework: admin contact, IT contact, frontline manager, executive sponsor
     { title: "User list received",               owner: "customer", durationDays: 5, required: true,
       customerNote: "Please provide a spreadsheet of all users to be set up in SafetyCulture. Include: full name, email address, job title, and site/location. Use the template your COM has sent, or ask them for one." },
     { title: "Site list received",               owner: "customer", durationDays: 5, required: true,
@@ -117,23 +125,27 @@ export const TASK_TEMPLATES = {
       customerNote: "Please confirm that onboarding is complete and your team is set up in SafetyCulture. Your COM will send a short sign-off form — this unlocks the next phase of your engagement." },
   ],
   "solution-delivery": [
-    { title: "PoC development",             owner: "cse", durationDays: 10, required: true  },
-    { title: "Internal testing (CSE)",      owner: "cse", durationDays: 5,  required: true  },
-    { title: "Customer UAT session",        owner: "customer", durationDays: 7, required: true,
+    { title: "PoC / initial build",          owner: "cse", durationDays: 10, required: true  },
+    { title: "Internal testing (CSE)",       owner: "cse", durationDays: 5,  required: true  },
+    { title: "Customer UAT session",         owner: "customer", durationDays: 7, required: true,
       customerNote: "Your integration is ready for user acceptance testing (UAT). Please test the solution in your environment and provide feedback to your CSE. We need: confirmation it works end-to-end, any bugs or issues found, and sign-off when you're satisfied." },
-    { title: "Iteration / bug fix cycle",   owner: "cse", durationDays: 5,  required: false },
-    { title: "Final testing sign-off",      owner: "cse", durationDays: 2,  required: true  },
-    { title: "Handover documentation",      owner: "cse", durationDays: 3,  required: true  },
-    { title: "Configuration runbook",       owner: "cse", durationDays: 2,  required: true  },
+    { title: "Iteration / bug fix cycle",    owner: "cse", durationDays: 5,  required: false },
+    { title: "Final testing sign-off",       owner: "cse", durationDays: 2,  required: true  },
+    { title: "Handover documentation",       owner: "cse", durationDays: 3,  required: true  },
+    // Framework: configuration runbook was the most consistently missing output across 92 engagements
+    // IT admin must be able to maintain the integration without calling SafetyCulture
+    { title: "Configuration runbook",        owner: "cse", durationDays: 2,  required: true  },
   ],
   "go-live": [
-    { title: "Production deployment",            owner: "cse", durationDays: 1, required: true  },
-    { title: "Hypercare support window",         owner: "cse", durationDays: 7, required: true  },
-    { title: "CSE → CSM handover call",          owner: "csm", durationDays: 2, required: true  },
-    { title: "CSM handover pack reviewed",       owner: "csm", durationDays: 3, required: true  },
-    { title: "Customer go-live confirmation",    owner: "customer", durationDays: 2, required: true,
-      customerNote: "Your integration is live in production! Please confirm everything is working as expected. Your CSE will send a short confirmation — this formally closes the engagement and hands you over to your CSM." },
-    { title: "Engagement closed in Salesforce",  owner: "cse", durationDays: 1, required: true  },
+    { title: "Production deployment",           owner: "cse", durationDays: 1, required: true  },
+    { title: "Hypercare support window",        owner: "cse", durationDays: 7, required: true  },
+    // Framework: support handover briefing is a universal go-live task — CSE is not 24/7 on-call
+    { title: "Support handover briefing",       owner: "cse", durationDays: 1, required: true  },
+    { title: "CSE → CSM handover call",         owner: "csm", durationDays: 2, required: true  },
+    { title: "CSM handover pack reviewed",      owner: "csm", durationDays: 3, required: true  },
+    { title: "Customer go-live confirmation",   owner: "customer", durationDays: 2, required: true,
+      customerNote: "Your integration is live in production! Please confirm everything is working as expected. Your CSE will send a short confirmation — this formally closes the engagement and hands you over to your CSM for ongoing support." },
+    { title: "Engagement closed in Salesforce", owner: "cse", durationDays: 1, required: true  },
   ],
   "csm-ongoing": [
     // Tasks are positioned by offsetDays from stage start — not chained end-to-end
