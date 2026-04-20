@@ -1015,9 +1015,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
 
             {/* Stage legend */}
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--border)", alignItems: "center" }}>
-              {!isManager && (
-                <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 6 }}>Showing your tasks only</span>
-              )}
+              <span style={{ fontSize: 10, color: "var(--text-muted)", marginRight: 6 }}>Showing your tasks only</span>
               {STAGES.map(s => (
                 <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                   <div style={{ width: 8, height: 8, borderRadius: 2, background: stageColour(s.key), flexShrink: 0 }} />
