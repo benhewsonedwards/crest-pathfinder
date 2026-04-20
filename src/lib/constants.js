@@ -136,9 +136,13 @@ export const TASK_TEMPLATES = {
     { title: "Engagement closed in Salesforce",  owner: "cse", durationDays: 1, required: true  },
   ],
   "csm-ongoing": [
-    { title: "30-day adoption review", owner: "csm", durationDays: 30, required: true  },
-    { title: "First QBR",              owner: "csm", durationDays: 60, required: true  },
-    { title: "Renewal assessment",     owner: "csm", durationDays: 90, required: false },
+    // Tasks are positioned by offsetDays from stage start — not chained end-to-end
+    // 30-day adoption review: due on day 30, open for 2 days
+    { title: "30-day adoption review", owner: "csm", offsetDays: 29, durationDays: 2, required: true  },
+    // First QBR: due around day 90, open for 5 days
+    { title: "First QBR",              owner: "csm", offsetDays: 88, durationDays: 5, required: true  },
+    // Renewal assessment: due around day 180, open for 5 days
+    { title: "Renewal assessment",     owner: "csm", offsetDays: 178, durationDays: 5, required: false },
   ],
 };
 
@@ -248,21 +252,28 @@ export function buildDefaultTasks(stageKey, startDate = todayIso()) {
   const templates = TASK_TEMPLATES[stageKey] || [];
   let cursor = startDate;
   return templates.map((t, i) => {
+    // If offsetDays is set, position from stage startDate absolutely (not chained)
+    const taskStart = t.offsetDays != null
+      ? workingDayAdd(startDate, t.offsetDays)
+      : cursor;
     const task = {
       id: stageKey + "-" + i + "-" + Date.now(),
       title: t.title,
       owner: t.owner,
       ownerRole: t.owner,
       ownerUid: null,
-      startDate: cursor,
-      endDate: workingDayAdd(cursor, t.durationDays),
+      startDate: taskStart,
+      endDate: workingDayAdd(taskStart, t.durationDays),
       required: t.required,
       done: false,
       locked: false,
       notes: "",
       ...(t.customerNote ? { customerNote: t.customerNote } : {}),
     };
-    cursor = workingDayAdd(task.endDate, 1);
+    // Only advance cursor for chained tasks (no offsetDays)
+    if (t.offsetDays == null) {
+      cursor = workingDayAdd(task.endDate, 1);
+    }
     return task;
   });
 }

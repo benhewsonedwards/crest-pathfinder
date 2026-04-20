@@ -106,8 +106,15 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
   const dragRef               = React.useRef(null);
   const committedRef          = React.useRef(null);
 
-  const colour  = stageColour(task.stageKey);
-  const movable = canEdit && !task.done && !task.locked;
+  const stageCol = stageColour(task.stageKey);
+  const movable  = canEdit && !task.done && !task.locked;
+
+  // Determine bar state colour
+  const today = todayIso();
+  const isOverdue  = !task.done && task.endDate && task.endDate < today;
+  const isComplete = task.done;
+  // done → green, overdue → red, otherwise stage colour
+  const colour = isComplete ? "#16A34A" : isOverdue ? "#EF4444" : stageCol;
 
   // Don't render bars for tasks with no dates or corrupt far-future dates
   const maxReasonable = L.maxReasonable || '2031-01-01';
@@ -210,9 +217,10 @@ function DraggableBar({ task, idx, L, canEdit, onCommit, containerRef }) {
       )}
       {/* Bar body */}
       <rect x={x1} y={y} width={barW} height={barH} rx={3}
-        fill={task.done ? colour+"28" : task.locked ? colour+"44" : drag ? colour+"BB" : colour+"70"}
-        stroke={task.locked ? colour : "none"} strokeWidth={task.locked ? 1.5 : 0}
-        strokeDasharray={task.locked ? "5 2" : "none"}
+        fill={isComplete ? colour+"40" : isOverdue ? colour+"60" : task.locked ? colour+"44" : drag ? colour+"BB" : colour+"70"}
+        stroke={isOverdue ? colour : task.locked ? colour : "none"}
+        strokeWidth={isOverdue || task.locked ? 1.5 : 0}
+        strokeDasharray={task.locked && !isOverdue ? "5 2" : "none"}
         style={{ cursor: movable ? "grab" : "default" }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
