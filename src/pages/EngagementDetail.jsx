@@ -1111,6 +1111,44 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
               </div>
             </Card>
 
+            {/* Renewal context — read from parent customer record */}
+            {(() => {
+              const parentCustomer = customers.find(c => c.id === engagement.customerId);
+              if (!parentCustomer?.renewalDate && !parentCustomer?.renewalARR) return null;
+              const RENEWAL_META = {
+                on_track:        { emoji: "🟢", label: "On track",        colour: "var(--green)" },
+                at_risk:         { emoji: "🟠", label: "At risk",         colour: "var(--amber)" },
+                needs_attention: { emoji: "🔴", label: "Needs attention", colour: "var(--red)"   },
+                not_renewing:    { emoji: "⚫", label: "Not renewing",    colour: "var(--text-muted)" },
+              };
+              const rMeta = RENEWAL_META[parentCustomer.renewalStatus || "on_track"];
+              const daysUntil = parentCustomer.renewalDate
+                ? Math.ceil((new Date(parentCustomer.renewalDate) - new Date()) / 86400000)
+                : null;
+              return (
+                <Card>
+                  <CardHeader>
+                    <Label>Renewal</Label>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>from customer record</span>
+                  </CardHeader>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 0 }}>
+                    {[
+                      ["Date", parentCustomer.renewalDate
+                        ? `${new Date(parentCustomer.renewalDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}${daysUntil !== null ? ` · ${daysUntil <= 0 ? "overdue" : `${daysUntil}d`}` : ""}`
+                        : "—"],
+                      ["ARR", (parentCustomer.renewalARR || parentCustomer.arr) ? `£${Number(parentCustomer.renewalARR || parentCustomer.arr).toLocaleString()}` : "—"],
+                      ["Status", `${rMeta.emoji} ${rMeta.label}`],
+                    ].map(([k, v], i) => (
+                      <div key={k} style={{ padding: "12px 16px", borderRight: i < 2 ? "1px solid var(--border)" : "none" }}>
+                        <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 3 }}>{k}</p>
+                        <p style={{ fontSize: 13, fontWeight: 600, color: k === "Status" ? rMeta.colour : "var(--text-primary)" }}>{v}</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              );
+            })()}
+
             {/* SC Modules & Integrations */}
             {((engagement.modules?.length > 0) || (engagement.integrations?.length > 0)) && (
               <Card>

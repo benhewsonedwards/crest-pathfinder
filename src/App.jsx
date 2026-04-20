@@ -174,6 +174,7 @@ function AppShell() {
             onNewEngagement={() => setShowNewModal(true)}
             personFilter={pipelinePersonFilter}
             onClearPersonFilter={() => setPipelinePersonFilter(null)}
+            onSelectCustomer={handleSelectCustomer}
           />
         ) : page === "engagements" ? (
           <EngagementsPage

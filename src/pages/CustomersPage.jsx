@@ -41,6 +41,7 @@ const BLANK_CUSTOMER = {
   industry: "", website: "", employees: "",
   csmEmail: "", comEmail: "", aeEmail: "",
   scOrgRoleId: "", periscopeLink: "", notes: "",
+  renewalDate: "", renewalARR: "", renewalStatus: "on_track",
 };
 
 export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
@@ -397,6 +398,28 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
           <FieldGroup label="SC Org Role ID"><Input value={form.scOrgRoleId} onChange={e => setForm(f => ({ ...f, scOrgRoleId: e.target.value }))} placeholder="role_..." /></FieldGroup>
           <div style={{ gridColumn: "1 / -1" }}>
             <FieldGroup label="Periscope Link"><Input value={form.periscopeLink} onChange={e => setForm(f => ({ ...f, periscopeLink: e.target.value }))} placeholder="https://tools.safetyculture.com/..." /></FieldGroup>
+          </div>
+          {/* ── Renewal ── */}
+          <div style={{ gridColumn: "1 / -1", borderTop: "1px solid var(--border)", paddingTop: 14, marginTop: 2 }}>
+            <p style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 12 }}>
+              Renewal · <span style={{ fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>manual entry until Salesforce sync</span>
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+              <FieldGroup label="Renewal date">
+                <Input value={form.renewalDate || ""} onChange={e => setForm(f => ({ ...f, renewalDate: e.target.value }))} type="date" />
+              </FieldGroup>
+              <FieldGroup label="Renewal ARR">
+                <Input value={form.renewalARR || ""} onChange={e => setForm(f => ({ ...f, renewalARR: e.target.value }))} type="number" placeholder="e.g. 45000" />
+              </FieldGroup>
+              <FieldGroup label="Renewal status">
+                <Select value={form.renewalStatus || "on_track"} onChange={e => setForm(f => ({ ...f, renewalStatus: e.target.value }))}>
+                  <option value="on_track">🟢 On track</option>
+                  <option value="at_risk">🟠 At risk</option>
+                  <option value="needs_attention">🔴 Needs attention</option>
+                  <option value="not_renewing">⚫ Not renewing</option>
+                </Select>
+              </FieldGroup>
+            </div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 18 }}>

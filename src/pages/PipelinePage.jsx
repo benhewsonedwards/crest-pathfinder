@@ -59,8 +59,9 @@ function StageFunnel({ engagements, onStageClick, activeFilter }) {
   );
 }
 
-export default function PipelinePage({ onSelectEngagement, onNewEngagement, personFilter, onClearPersonFilter }) {
+export default function PipelinePage({ onSelectEngagement, onNewEngagement, personFilter, onClearPersonFilter, onSelectCustomer }) {
   const [engagements, setEngagements] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState(null);
   const [ragFilter, setRagFilter] = useState(null);
@@ -88,7 +89,10 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement, pers
       setEngagements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
-    return unsub;
+    const unsub2 = onSnapshot(collection(db, "customers"), snap => {
+      setCustomers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => { unsub(); unsub2(); };
   }, []);
 
   const filtered = engagements.filter(e => {
@@ -106,13 +110,13 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement, pers
   const atRisk = engagements.filter(e => e.ragStatus === "amber" || e.ragStatus === "red").length;
   const inDelivery = engagements.filter(e => ["solution-delivery", "onboarding"].includes(e.currentStage)).length;
 
-  // Renewals — quarter bucketing
+  // Renewals — read from customers, bucket by quarter
   const today = new Date();
-  const quarterEnd = (q) => { // q=0 this quarter, q=1 next, q=2 after
+  const quarterEnd = (q) => {
     const m = today.getMonth();
     const qStart = Math.floor(m / 3) * 3 + q * 3;
     const yr = today.getFullYear() + Math.floor((m + q * 3) / 12);
-    return new Date(yr, (qStart % 12) + 3, 0); // last day of the quarter
+    return new Date(yr, (qStart % 12) + 3, 0);
   };
   const q0End = quarterEnd(0), q1End = quarterEnd(1), q2End = quarterEnd(2);
 
@@ -122,37 +126,37 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement, pers
     if (d <= q0End) return 0;
     if (d <= q1End) return 1;
     if (d <= q2End) return 2;
-    return 3; // beyond 3 quarters
+    return 3;
   }
 
   const RENEWAL_STATUS_META = {
-    on_track:       { emoji: "🟢", label: "On track",       colour: "var(--green)" },
-    at_risk:        { emoji: "🟠", label: "At risk",        colour: "var(--amber)" },
-    needs_attention:{ emoji: "🔴", label: "Needs attention",colour: "var(--red)"   },
-    not_renewing:   { emoji: "⚫", label: "Not renewing",   colour: "var(--text-muted)" },
+    on_track:       { emoji: "🟢", label: "On track",        colour: "var(--green)" },
+    at_risk:        { emoji: "🟠", label: "At risk",         colour: "var(--amber)" },
+    needs_attention:{ emoji: "🔴", label: "Needs attention", colour: "var(--red)"   },
+    not_renewing:   { emoji: "⚫", label: "Not renewing",    colour: "var(--text-muted)" },
   };
 
-  const renewalsWithDate = engagements
-    .filter(e => e.renewalDate)
-    .map(e => ({ ...e, _quarter: renewalQuarter(e.renewalDate) }))
-    .filter(e => e._quarter <= 2); // only show within 3 quarters
+  const renewalsWithDate = customers
+    .filter(c => c.renewalDate)
+    .map(c => ({ ...c, _quarter: renewalQuarter(c.renewalDate) }))
+    .filter(c => c._quarter <= 2);
 
   const renewalsByQuarter = [0, 1, 2].map(q => ({
     q,
     label: q === 0 ? "This quarter" : q === 1 ? "Next quarter" : "Quarter +2",
     colour: q === 0 ? "var(--red)" : q === 1 ? "var(--amber)" : "var(--green)",
-    items: renewalsWithDate.filter(e => e._quarter === q),
+    items: renewalsWithDate.filter(c => c._quarter === q),
   }));
 
-  const totalRenewalArr = renewalsWithDate.reduce((s, e) => s + (Number(e.renewalARR || e.arr) || 0), 0);
-  const atRiskRenewals = renewalsWithDate.filter(e => e.renewalStatus === "at_risk" || e.renewalStatus === "needs_attention").length;
+  const totalRenewalArr = renewalsWithDate.reduce((s, c) => s + (Number(c.renewalARR || c.arr) || 0), 0);
+  const atRiskRenewals = renewalsWithDate.filter(c => c.renewalStatus === "at_risk" || c.renewalStatus === "needs_attention").length;
 
-  function getRSortValue(e, key) {
+  function getRSortValue(c, key) {
     switch (key) {
-      case "customer":      return e.customer?.toLowerCase() || "";
-      case "renewalDate":   return e.renewalDate || "";
-      case "renewalARR":    return Number(e.renewalARR || e.arr) || 0;
-      case "renewalStatus": return ["on_track","at_risk","needs_attention","not_renewing"].indexOf(e.renewalStatus || "on_track");
+      case "customer":      return c.name?.toLowerCase() || "";
+      case "renewalDate":   return c.renewalDate || "";
+      case "renewalARR":    return Number(c.renewalARR || c.arr) || 0;
+      case "renewalStatus": return ["on_track","at_risk","needs_attention","not_renewing"].indexOf(c.renewalStatus || "on_track");
       default: return "";
     }
   }
@@ -360,7 +364,7 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement, pers
             <p style={{ fontSize: 32, marginBottom: 10 }}>🔄</p>
             <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 15, color: "var(--text-primary)", marginBottom: 6 }}>No renewal dates set</p>
             <p style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 380, margin: "0 auto 16px" }}>
-              Open any engagement and add a renewal date in the Details tab to start tracking your 3-quarter renewal forecast.
+              Open any customer record and add a renewal date to start tracking your 3-quarter forecast.
             </p>
           </Card>
         ) : (
@@ -390,34 +394,35 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement, pers
                   <Label style={{ textAlign: "right" }}>CSM</Label>
                 </div>
                 {/* Rows */}
-                {rSort(items, getRSortValue).map((e, i, arr) => {
-                  const statusMeta = RENEWAL_STATUS_META[e.renewalStatus || "on_track"];
-                  const csmName = e.csmEmail ? e.csmEmail.split("@")[0].split(".").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ") : "—";
-                  const daysUntil = Math.ceil((new Date(e.renewalDate) - today) / 86400000);
+                {rSort(items, getRSortValue).map((c, i, arr) => {
+                  const statusMeta = RENEWAL_STATUS_META[c.renewalStatus || "on_track"];
+                  const csmPerson = PEOPLE.find(p => p.email === c.csmEmail);
+                  const csmName = csmPerson?.name?.split(" ")[0] || (c.csmEmail ? c.csmEmail.split("@")[0].split(".")[0] : "—");
+                  const daysUntil = Math.ceil((new Date(c.renewalDate) - today) / 86400000);
                   return (
-                    <div key={e.id} onClick={() => onSelectEngagement(e)} style={{
+                    <div key={c.id} onClick={() => onSelectCustomer?.(c)} style={{
                       display: "grid", gridTemplateColumns: "1fr 120px 110px 100px 90px",
                       gap: 10, padding: "11px 18px", alignItems: "center",
                       borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-                      cursor: "pointer", transition: "background 0.1s",
+                      cursor: onSelectCustomer ? "pointer" : "default", transition: "background 0.1s",
                     }}
-                    onMouseEnter={e2 => e2.currentTarget.style.background = "var(--surface2)"}
-                    onMouseLeave={e2 => e2.currentTarget.style.background = "transparent"}
+                    onMouseEnter={e => { if (onSelectCustomer) e.currentTarget.style.background = "var(--surface2)"; }}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                     >
                       <div>
-                        <p style={{ fontWeight: 500, fontSize: 13 }}>{e.customer}</p>
-                        {e.csId && <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{e.csId}</p>}
+                        <p style={{ fontWeight: 500, fontSize: 13 }}>{c.name}</p>
+                        {c.sfAccountId && <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{c.sfAccountId}</p>}
                       </div>
                       <div>
                         <p style={{ fontSize: 12, fontWeight: 600, color: daysUntil <= 30 ? colour : "var(--text-primary)" }}>
-                          {new Date(e.renewalDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                          {new Date(c.renewalDate).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                         </p>
                         <p style={{ fontSize: 11, color: "var(--text-muted)" }}>
                           {daysUntil <= 0 ? "Overdue" : `${daysUntil}d away`}
                         </p>
                       </div>
                       <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>
-                        {(e.renewalARR || e.arr) ? `£${Number(e.renewalARR || e.arr).toLocaleString()}` : "—"}
+                        {(c.renewalARR || c.arr) ? `£${Number(c.renewalARR || c.arr).toLocaleString()}` : "—"}
                       </span>
                       <span style={{ fontSize: 12, fontWeight: 600, color: statusMeta.colour }}>
                         {statusMeta.emoji} {statusMeta.label}
@@ -431,7 +436,7 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement, pers
           })
         )}
         <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-          ☁️ Salesforce sync coming — renewal dates and ARR are manually entered until the integration is live. Edit any engagement to update.
+          ☁️ Salesforce sync coming — renewal dates are entered on the customer record. Edit any customer to update.
         </p>
       </>)}
     </div>
