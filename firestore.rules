@@ -57,6 +57,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ─── /customers/successPlan ───────────────────────────────────────────────
+    // QBR snapshots — created and updated by team members
+    match /customers/{customerId}/successPlan/{snapshotId} {
+      allow read:   if isViewer();
+      allow create: if isTeamMember();
+      allow update: if isTeamMember();
+      allow delete: if isAdmin();
+    }
+
     // ─── /integrations ────────────────────────────────────────────────────────
     match /integrations/{integrationId} {
       allow read:   if isViewer()

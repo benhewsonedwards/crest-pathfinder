@@ -504,6 +504,429 @@ function CommentaryTab({ activityEntries, engagementComments, engagements, onPos
   );
 }
 
+const OBJECTIVE_STATUSES = [
+  { key: "on_track",  label: "On track",  colour: "var(--green)", emoji: "🟢" },
+  { key: "at_risk",   label: "At risk",   colour: "var(--amber)", emoji: "🟠" },
+  { key: "achieved",  label: "Achieved",  colour: "var(--blue)",  emoji: "✅" },
+  { key: "not_started",label:"Not started",colour:"var(--text-muted)",emoji:"⚪"},
+];
+
+const CADENCES = ["Monthly", "Bi-monthly", "Quarterly", "Ad hoc"];
+
+const BLANK_SNAPSHOT = {
+  qbrLabel: "",         // e.g. "Q2 FY26 QBR"
+  qbrDate: "",
+  healthStatus: "green",
+  healthReason: "",
+  objectives: [],       // [{ id, description, status }]
+  metrics: [],          // [{ id, description, current, target }]
+  milestones: [],       // [{ id, description, targetDate, done }]
+  cadence: "Quarterly",
+  nextReviewDate: "",
+  csmNotes: "",
+};
+
+function SuccessPlanTab({ customer, canEdit, user, profile }) {
+  const [snapshots, setSnapshots]   = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [activeIdx, setActiveIdx]   = useState(0);   // index into snapshots array (0 = latest)
+  const [editing, setEditing]       = useState(false);
+  const [form, setForm]             = useState(null);
+  const [saving, setSaving]         = useState(false);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newLabel, setNewLabel]     = useState("");
+  const [newDate, setNewDate]       = useState(new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    const q = query(
+      collection(db, "customers", customer.id, "successPlan"),
+      orderBy("qbrDate", "desc")
+    );
+    return onSnapshot(q, snap => {
+      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setSnapshots(docs);
+      setLoading(false);
+    });
+  }, [customer.id]);
+
+  const current = snapshots[activeIdx] || null;
+
+  function startEdit() {
+    setForm({ ...current });
+    setEditing(true);
+  }
+
+  function cancelEdit() { setEditing(false); setForm(null); }
+
+  function updForm(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  // ── Objectives ──
+  function addObjective() {
+    updForm("objectives", [...(form.objectives || []), { id: Date.now().toString(), description: "", status: "not_started" }]);
+  }
+  function updObjective(id, k, v) {
+    updForm("objectives", form.objectives.map(o => o.id === id ? { ...o, [k]: v } : o));
+  }
+  function removeObjective(id) {
+    updForm("objectives", form.objectives.filter(o => o.id !== id));
+  }
+
+  // ── Metrics ──
+  function addMetric() {
+    updForm("metrics", [...(form.metrics || []), { id: Date.now().toString(), description: "", current: "", target: "" }]);
+  }
+  function updMetric(id, k, v) {
+    updForm("metrics", form.metrics.map(m => m.id === id ? { ...m, [k]: v } : m));
+  }
+  function removeMetric(id) {
+    updForm("metrics", form.metrics.filter(m => m.id !== id));
+  }
+
+  // ── Milestones ──
+  function addMilestone() {
+    updForm("milestones", [...(form.milestones || []), { id: Date.now().toString(), description: "", targetDate: "", done: false }]);
+  }
+  function updMilestone(id, k, v) {
+    updForm("milestones", form.milestones.map(m => m.id === id ? { ...m, [k]: v } : m));
+  }
+  function removeMilestone(id) {
+    updForm("milestones", form.milestones.filter(m => m.id !== id));
+  }
+
+  async function saveSnapshot() {
+    if (!form) return;
+    setSaving(true);
+    const data = {
+      ...form,
+      updatedAt: serverTimestamp(),
+      updatedBy: user?.displayName || null,
+    };
+    await updateDoc(doc(db, "customers", customer.id, "successPlan", current.id), data);
+    // Audit
+    await addDoc(collection(db, "customers", customer.id, "audit"), {
+      text: `Success plan updated: ${current.qbrLabel || "snapshot"}`,
+      authorName: user?.displayName || "System", authorUid: user?.uid || null,
+      _source: "audit", createdAt: serverTimestamp(),
+    });
+    setEditing(false); setForm(null); setSaving(false);
+  }
+
+  async function createSnapshot() {
+    if (!newLabel.trim() || !newDate) return;
+    setSaving(true);
+    // Copy latest snapshot as base, or start blank
+    const base = snapshots[0] ? {
+      ...snapshots[0],
+      objectives: (snapshots[0].objectives || []).map(o => ({ ...o, status: o.status === "achieved" ? "achieved" : "not_started" })),
+      milestones: (snapshots[0].milestones || []).map(m => ({ ...m, done: false })),
+    } : { ...BLANK_SNAPSHOT };
+    delete base.id;
+    const newSnap = {
+      ...base,
+      qbrLabel: newLabel.trim(),
+      qbrDate: newDate,
+      csmNotes: "",
+      createdBy: user?.displayName || null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await addDoc(collection(db, "customers", customer.id, "successPlan"), newSnap);
+    await addDoc(collection(db, "customers", customer.id, "audit"), {
+      text: `Success plan snapshot created: ${newLabel.trim()}`,
+      authorName: user?.displayName || "System", authorUid: user?.uid || null,
+      _source: "audit", createdAt: serverTimestamp(),
+    });
+    setNewLabel(""); setShowNewForm(false); setActiveIdx(0); setSaving(false);
+  }
+
+  if (loading) return <div style={{ textAlign: "center", padding: 40 }}><Spinner size={24} /></div>;
+
+  // ── Empty state ──
+  if (snapshots.length === 0 && !showNewForm) return (
+    <div>
+      <Card style={{ padding: "40px 20px", textAlign: "center" }}>
+        <p style={{ fontSize: 32, marginBottom: 10 }}>📊</p>
+        <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 15, color: "var(--text-primary)", marginBottom: 6 }}>
+          No success plan yet
+        </p>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 420, margin: "0 auto 20px" }}>
+          Create the first snapshot around the time of the first QBR. Each snapshot captures objectives, metrics, milestones, and health at a point in time — building a history of how this account has progressed.
+        </p>
+        {canEdit && <Btn onClick={() => setShowNewForm(true)}>+ Create first snapshot</Btn>}
+      </Card>
+    </div>
+  );
+
+  const healthMeta = { green: { emoji: "🟢", label: "Healthy", colour: "var(--green)" }, amber: { emoji: "🟠", label: "At risk", colour: "var(--amber)" }, red: { emoji: "🔴", label: "Off track", colour: "var(--red)" } };
+
+  return (
+    <div>
+      {/* Snapshot selector + new snapshot button */}
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 0, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border)", flexWrap: "wrap" }}>
+          {snapshots.map((s, i) => (
+            <button key={s.id} onClick={() => { setActiveIdx(i); setEditing(false); }} style={{
+              padding: "7px 14px", fontSize: 12, cursor: "pointer", border: "none",
+              borderRight: i < snapshots.length - 1 ? "1px solid var(--border)" : "none",
+              background: activeIdx === i ? "var(--purple)" : "transparent",
+              color: activeIdx === i ? "white" : "var(--text-second)",
+              fontWeight: activeIdx === i ? 600 : 400, fontFamily: "inherit",
+            }}>
+              {s.qbrLabel || s.qbrDate || `Snapshot ${snapshots.length - i}`}
+              {i === 0 && <span style={{ marginLeft: 5, fontSize: 9, opacity: 0.8 }}>LATEST</span>}
+            </button>
+          ))}
+        </div>
+        {canEdit && !showNewForm && (
+          <Btn size="sm" variant="ghost" onClick={() => setShowNewForm(true)}>+ New snapshot</Btn>
+        )}
+      </div>
+
+      {/* New snapshot form */}
+      {showNewForm && (
+        <Card style={{ padding: 18, marginBottom: 16 }}>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, marginBottom: 12 }}>New QBR snapshot</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <FieldGroup label="QBR label">
+              <Input value={newLabel} onChange={e => setNewLabel(e.target.value)} placeholder="e.g. Q2 FY26 QBR" autoFocus />
+            </FieldGroup>
+            <FieldGroup label="QBR date">
+              <Input value={newDate} onChange={e => setNewDate(e.target.value)} type="date" />
+            </FieldGroup>
+          </div>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+            {snapshots.length > 0
+              ? "Objectives and milestones will be copied from the latest snapshot as a starting point. Achieved objectives are preserved; others reset to Not started."
+              : "Starts blank — you can add objectives, metrics and milestones after creating it."}
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn variant="ghost" size="sm" onClick={() => setShowNewForm(false)}>Cancel</Btn>
+            <Btn size="sm" onClick={createSnapshot} disabled={!newLabel.trim() || !newDate || saving}>
+              {saving ? "Creating..." : "Create snapshot"}
+            </Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* Current snapshot view / edit */}
+      {current && !editing && (
+        <div>
+          {/* Header */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+            <div>
+              <h2 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 18, color: "var(--text-primary)", marginBottom: 4 }}>
+                {current.qbrLabel || "Success Plan"}
+              </h2>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                {current.qbrDate && (
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    {new Date(current.qbrDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+                  </span>
+                )}
+                <span style={{ fontSize: 13, fontWeight: 600, color: healthMeta[current.healthStatus || "green"].colour }}>
+                  {healthMeta[current.healthStatus || "green"].emoji} {healthMeta[current.healthStatus || "green"].label}
+                </span>
+                {current.healthReason && (
+                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>— {current.healthReason}</span>
+                )}
+              </div>
+            </div>
+            {canEdit && activeIdx === 0 && (
+              <Btn size="sm" variant="ghost" onClick={startEdit}>✎ Edit</Btn>
+            )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {/* Objectives */}
+            <Card>
+              <CardHeader><Label>Business objectives</Label></CardHeader>
+              <div style={{ padding: "12px 18px" }}>
+                {(current.objectives || []).length === 0 ? (
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>None set</p>
+                ) : (current.objectives || []).map(o => {
+                  const st = OBJECTIVE_STATUSES.find(s => s.key === o.status) || OBJECTIVE_STATUSES[3];
+                  return (
+                    <div key={o.id} style={{ display: "flex", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+                      <span style={{ fontSize: 14, flexShrink: 0, marginTop: 1 }}>{st.emoji}</span>
+                      <p style={{ fontSize: 13, flex: 1, color: "var(--text-primary)", lineHeight: 1.5 }}>{o.description}</p>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: st.colour, flexShrink: 0, whiteSpace: "nowrap" }}>{st.label}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {/* Metrics */}
+            <Card>
+              <CardHeader><Label>Success metrics</Label></CardHeader>
+              <div style={{ padding: "12px 18px" }}>
+                {(current.metrics || []).length === 0 ? (
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>None set</p>
+                ) : (current.metrics || []).map(m => (
+                  <div key={m.id} style={{ padding: "7px 0", borderBottom: "1px solid var(--border)" }}>
+                    <p style={{ fontSize: 13, color: "var(--text-primary)", marginBottom: 3 }}>{m.description}</p>
+                    <div style={{ display: "flex", gap: 12 }}>
+                      {m.current && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Current: <strong style={{ color: "var(--text-primary)" }}>{m.current}</strong></span>}
+                      {m.target  && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Target: <strong style={{ color: "var(--green)" }}>{m.target}</strong></span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Milestones */}
+            <Card>
+              <CardHeader><Label>Key milestones</Label></CardHeader>
+              <div style={{ padding: "12px 18px" }}>
+                {(current.milestones || []).length === 0 ? (
+                  <p style={{ fontSize: 13, color: "var(--text-muted)" }}>None set</p>
+                ) : (current.milestones || []).map(m => (
+                  <div key={m.id} style={{ display: "flex", gap: 8, padding: "7px 0", borderBottom: "1px solid var(--border)", alignItems: "center" }}>
+                    <span style={{ fontSize: 14, flexShrink: 0 }}>{m.done ? "✅" : "⭕"}</span>
+                    <p style={{ fontSize: 13, flex: 1, color: m.done ? "var(--text-muted)" : "var(--text-primary)", textDecoration: m.done ? "line-through" : "none" }}>
+                      {m.description}
+                    </p>
+                    {m.targetDate && (
+                      <span style={{ fontSize: 11, color: "var(--text-muted)", flexShrink: 0, whiteSpace: "nowrap" }}>
+                        {new Date(m.targetDate).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+
+            {/* Review cadence + CSM notes */}
+            <Card>
+              <CardHeader><Label>Review & notes</Label></CardHeader>
+              <div style={{ padding: "12px 18px" }}>
+                {[
+                  ["Cadence", current.cadence],
+                  ["Next review", current.nextReviewDate ? new Date(current.nextReviewDate).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : null],
+                  ["Updated by", current.updatedBy],
+                ].filter(([, v]) => v).map(([k, v]) => (
+                  <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{k}</span>
+                    <span style={{ fontSize: 12, fontWeight: 500 }}>{v}</span>
+                  </div>
+                ))}
+                {current.csmNotes && (
+                  <p style={{ fontSize: 13, color: "var(--text-second)", marginTop: 12, lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{current.csmNotes}</p>
+                )}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Edit form */}
+      {current && editing && form && (
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 16, color: "var(--text-primary)" }}>
+              Editing: {current.qbrLabel}
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn variant="ghost" size="sm" onClick={cancelEdit}>Cancel</Btn>
+              <Btn size="sm" onClick={saveSnapshot} disabled={saving}>{saving ? "Saving..." : "Save"}</Btn>
+            </div>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            {/* Health */}
+            <Card style={{ gridColumn: "1 / -1", padding: 18 }}>
+              <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, marginBottom: 12 }}>Health</p>
+              <div style={{ display: "grid", gridTemplateColumns: "160px 1fr", gap: 12 }}>
+                <FieldGroup label="Status">
+                  <Select value={form.healthStatus || "green"} onChange={e => updForm("healthStatus", e.target.value)}>
+                    <option value="green">🟢 Healthy</option>
+                    <option value="amber">🟠 At risk</option>
+                    <option value="red">🔴 Off track</option>
+                  </Select>
+                </FieldGroup>
+                <FieldGroup label="Reason">
+                  <Input value={form.healthReason || ""} onChange={e => updForm("healthReason", e.target.value)} placeholder="One line explaining the health status..." />
+                </FieldGroup>
+              </div>
+            </Card>
+
+            {/* Objectives */}
+            <Card style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>Business objectives</p>
+                <button onClick={addObjective} style={{ fontSize: 11, color: "var(--purple)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>+ Add</button>
+              </div>
+              {(form.objectives || []).map(o => (
+                <div key={o.id} style={{ display: "flex", gap: 8, marginBottom: 8, alignItems: "center" }}>
+                  <Input value={o.description} onChange={e => updObjective(o.id, "description", e.target.value)} placeholder="Objective description..." style={{ flex: 1, fontSize: 12 }} />
+                  <select value={o.status} onChange={e => updObjective(o.id, "status", e.target.value)} style={{ fontSize: 11, padding: "6px 8px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "inherit", width: 110 }}>
+                    {OBJECTIVE_STATUSES.map(s => <option key={s.key} value={s.key}>{s.emoji} {s.label}</option>)}
+                  </select>
+                  <button onClick={() => removeObjective(o.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 14, padding: "2px 4px", flexShrink: 0 }}>✕</button>
+                </div>
+              ))}
+              {(form.objectives || []).length === 0 && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No objectives yet — click + Add</p>}
+            </Card>
+
+            {/* Metrics */}
+            <Card style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>Success metrics</p>
+                <button onClick={addMetric} style={{ fontSize: 11, color: "var(--purple)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>+ Add</button>
+              </div>
+              {(form.metrics || []).map(m => (
+                <div key={m.id} style={{ display: "grid", gridTemplateColumns: "1fr 80px 80px 20px", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                  <Input value={m.description} onChange={e => updMetric(m.id, "description", e.target.value)} placeholder="Metric..." style={{ fontSize: 12 }} />
+                  <Input value={m.current} onChange={e => updMetric(m.id, "current", e.target.value)} placeholder="Current" style={{ fontSize: 12 }} />
+                  <Input value={m.target}  onChange={e => updMetric(m.id, "target",  e.target.value)} placeholder="Target"  style={{ fontSize: 12 }} />
+                  <button onClick={() => removeMetric(m.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 14, padding: "2px 0" }}>✕</button>
+                </div>
+              ))}
+              {(form.metrics || []).length === 0 && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No metrics yet — click + Add</p>}
+            </Card>
+
+            {/* Milestones */}
+            <Card style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>Key milestones</p>
+                <button onClick={addMilestone} style={{ fontSize: 11, color: "var(--purple)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>+ Add</button>
+              </div>
+              {(form.milestones || []).map(m => (
+                <div key={m.id} style={{ display: "grid", gridTemplateColumns: "20px 1fr 110px 20px", gap: 6, marginBottom: 8, alignItems: "center" }}>
+                  <input type="checkbox" checked={m.done} onChange={e => updMilestone(m.id, "done", e.target.checked)} style={{ accentColor: "var(--purple)", width: 14, height: 14 }} />
+                  <Input value={m.description} onChange={e => updMilestone(m.id, "description", e.target.value)} placeholder="Milestone..." style={{ fontSize: 12 }} />
+                  <Input value={m.targetDate} onChange={e => updMilestone(m.id, "targetDate", e.target.value)} type="date" style={{ fontSize: 12 }} />
+                  <button onClick={() => removeMilestone(m.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 14, padding: "2px 0" }}>✕</button>
+                </div>
+              ))}
+              {(form.milestones || []).length === 0 && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No milestones yet — click + Add</p>}
+            </Card>
+
+            {/* Review cadence + notes */}
+            <Card style={{ padding: 18 }}>
+              <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, marginBottom: 12 }}>Review & notes</p>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <FieldGroup label="Review cadence">
+                  <Select value={form.cadence || "Quarterly"} onChange={e => updForm("cadence", e.target.value)}>
+                    {CADENCES.map(c => <option key={c}>{c}</option>)}
+                  </Select>
+                </FieldGroup>
+                <FieldGroup label="Next review date">
+                  <Input value={form.nextReviewDate || ""} onChange={e => updForm("nextReviewDate", e.target.value)} type="date" />
+                </FieldGroup>
+              </div>
+              <FieldGroup label="CSM notes">
+                <Textarea value={form.csmNotes || ""} onChange={e => updForm("csmNotes", e.target.value)} placeholder="Anything else relevant — account dynamics, risks, exec relationships..." rows={4} />
+              </FieldGroup>
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Expansion signals ────────────────────────────────────────────────────────
 const SIGNAL_TYPES = [
   { key: "new_use_case",           label: "New use case",           colour: "#6559FF", bg: "rgba(101,89,255,0.12)" },
   { key: "new_team",               label: "New team",               colour: "#00D1FF", bg: "rgba(0,209,255,0.12)"  },
@@ -1119,6 +1542,7 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
       <Tabs tabs={[
         { id: "overview",      label: "Overview" },
         { id: "stakeholders",  label: "Stakeholders" },
+        { id: "success-plan",  label: "Success Plan" },
         { id: "integrations",  label: "Integrations", badge: integrations.length || null },
         { id: "tickets",       label: "Request history", badge: openTickets.length || null },
         { id: "engagements",   label: "Engagements", badge: engagements.length || null },
@@ -1477,6 +1901,11 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
             </Card>
           )}
         </div>
+      )}
+
+      {/* ── SUCCESS PLAN ── */}
+      {tab === "success-plan" && (
+        <SuccessPlanTab customer={customer} canEdit={canEdit} user={user} profile={profile} />
       )}
 
       {/* ── STAKEHOLDERS ── */}
