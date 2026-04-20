@@ -818,11 +818,11 @@ export default function MyDashboard({ onSelectEngagement, users }) {
     }
   }, [allItems, listFilter, selectedDay, showDone, myUid, today]);
 
-  // Stats
-  const myTasks    = allItems.filter(i => !i.task.done && isMyTask(i.task));
-  const overdue    = allItems.filter(i => !i.task.done && i.task.endDate && i.task.endDate < today);
-  const dueThisWeek = allItems.filter(i => !i.task.done && i.task.endDate && i.task.endDate >= today && i.task.endDate <= workingDayAdd(today, 7));
-  const callTasks  = allItems.filter(i => !i.task.done && isCallTask(i.task.title) && (listFilter === "all" || isMyTask(i.task)));
+  // Stats — all filtered to current user's tasks only
+  const myTasks     = allItems.filter(i => !i.task.done && isMyTask(i.task));
+  const overdue     = myTasks.filter(i => i.task.endDate && i.task.endDate < today);
+  const dueThisWeek = myTasks.filter(i => i.task.endDate && i.task.endDate >= today && i.task.endDate <= workingDayAdd(today, 7));
+  const callTasks   = myTasks.filter(i => isCallTask(i.task.title));
 
   // Navigation
   function prevPeriod() {

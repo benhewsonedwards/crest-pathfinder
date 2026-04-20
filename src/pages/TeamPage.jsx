@@ -40,7 +40,7 @@ function AppRolePill({ role }) {
   return <Pill color={APP_ROLE_COLOUR[role] || "grey"} style={{ fontSize: 10 }}>{role?.replace("_", " ")}</Pill>;
 }
 
-function PersonRow({ person, fbUser, isAdmin, onEdit, teamColour, showTeam }) {
+function PersonRow({ person, fbUser, isAdmin, onEdit, teamColour, showTeam, onFilterByPerson }) {
   const initials = person.initials || person.name.split(" ").map(n => n[0]).join("").slice(0, 2);
   const cols = showTeam
     ? "36px 1fr 100px 80px 100px 120px 80px"
@@ -79,12 +79,19 @@ function PersonRow({ person, fbUser, isAdmin, onEdit, teamColour, showTeam }) {
       {fbUser
         ? <AppRolePill role={fbUser.role} />
         : <span style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>not signed in yet</span>}
-      <div>{isAdmin && fbUser && <Btn size="sm" variant="ghost" onClick={() => onEdit(fbUser)}>Edit</Btn>}</div>
+      <div style={{ display: "flex", gap: 6 }}>
+        {onFilterByPerson && (
+          <Btn size="sm" variant="ghost" onClick={() => onFilterByPerson(person.email)} title={`View ${person.name.split(" ")[0]}'s engagements`}>
+            Pipeline
+          </Btn>
+        )}
+        {isAdmin && fbUser && <Btn size="sm" variant="ghost" onClick={() => onEdit(fbUser)}>Edit</Btn>}
+      </div>
     </div>
   );
 }
 
-function TeamCard({ team, fbUsers, isAdmin, onEdit }) {
+function TeamCard({ team, fbUsers, isAdmin, onEdit, onFilterByPerson }) {
   const [open, setOpen] = useState(true);
   const manager = team.manager ? team.members.find(p => p.email === team.manager) : null;
   const rest = team.members.filter(p => p.email !== team.manager);
@@ -109,11 +116,11 @@ function TeamCard({ team, fbUsers, isAdmin, onEdit }) {
           </div>
           {manager && (
             <div style={{ background: team.colour + "08" }}>
-              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} />
+              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} onFilterByPerson={onFilterByPerson} />
             </div>
           )}
           {rest.map(person => (
-            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} />
+            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} onFilterByPerson={onFilterByPerson} />
           ))}
         </div>
       )}
@@ -121,7 +128,7 @@ function TeamCard({ team, fbUsers, isAdmin, onEdit }) {
   );
 }
 
-export default function TeamPage() {
+export default function TeamPage({ onFilterByPerson }) {
   const { profile } = useAuth();
   const [fbUsers, setFbUsers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -164,7 +171,7 @@ export default function TeamPage() {
       </div>
 
       {tab === "org" && ORG.map(team => (
-        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} onEdit={setEditingUser} />
+        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} onEdit={setEditingUser} onFilterByPerson={onFilterByPerson} />
       ))}
 
       {tab === "all" && (
@@ -174,7 +181,7 @@ export default function TeamPage() {
           </div>
           {PEOPLE.map((person, i) => (
             <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={setEditingUser}
-              teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} />
+              teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} onFilterByPerson={onFilterByPerson} />
           ))}
         </Card>
       )}

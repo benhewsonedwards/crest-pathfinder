@@ -349,6 +349,14 @@ export default function SharePage({ token, customerId: legacyCustomerId }) {
 
   const pending = customerTasks.filter(({ task }) => !task.done);
 
+  // Overall engagement task completion (all tasks, not just customer ones)
+  const allEngagementTasks = latestEngagement
+    ? STAGE_KEYS.flatMap(sk => latestEngagement.stageTasks?.[sk] || [])
+    : [];
+  const completedCount = allEngagementTasks.filter(t => t.done).length;
+  const totalCount = allEngagementTasks.length;
+  const completionPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
   return (
     <div style={{ minHeight: "100vh", background: "#F5F7FB", fontFamily: "'Noto Sans', sans-serif" }}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&family=Noto+Sans:wght@400;500;600&display=swap');`}</style>
@@ -372,6 +380,29 @@ export default function SharePage({ token, customerId: legacyCustomerId }) {
       </div>
 
       <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 20px 48px" }}>
+
+        {/* Overall progress banner */}
+        {totalCount > 0 && (
+          <div style={{ background: "#FFFFFF", border: "1px solid #E4E7EF", borderRadius: 12, padding: "16px 20px", marginBottom: 16, display: "flex", alignItems: "center", gap: 16 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "#111827", margin: 0 }}>
+                  Engagement progress
+                </p>
+                <span style={{ fontSize: 13, fontWeight: 700, color: completionPct === 100 ? "#16A34A" : "#6559FF" }}>
+                  {completionPct}%
+                </span>
+              </div>
+              <div style={{ height: 8, borderRadius: 999, background: "#E5E7EB", overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${completionPct}%`, borderRadius: 999, background: completionPct === 100 ? "#16A34A" : "#6559FF", transition: "width 0.4s ease" }} />
+              </div>
+              <p style={{ fontSize: 11, color: "#9CA3AF", marginTop: 6, margin: "6px 0 0" }}>
+                {completedCount} of {totalCount} tasks complete
+                {pending.length > 0 && <span style={{ color: "#D97706", fontWeight: 600 }}> · {pending.length} action{pending.length !== 1 ? "s" : ""} need your input</span>}
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Progress */}
         {latestEngagement && (

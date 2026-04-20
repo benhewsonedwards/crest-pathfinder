@@ -30,6 +30,8 @@ function AppShell() {
   const [selectedEngagement, setSelectedEngagement] = useState(null);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [showNewModal, setShowNewModal] = useState(false);
+  const [newEngagementDefaults, setNewEngagementDefaults] = useState(null); // pre-populate from customer
+  const [pipelinePersonFilter, setPipelinePersonFilter] = useState(null); // email to pre-filter pipeline by person
   const [users, setUsers] = useState([]);
   const [customers, setCustomers] = useState([]);
 
@@ -156,12 +158,22 @@ function AppShell() {
         ) : page === "customers" ? (
           <CustomersPage
             onSelectCustomer={handleSelectCustomer}
-            onNewCustomer={() => {}}
+            onNewCustomer={(customerPrompt) => {
+              // Pre-populate engagement modal with the just-created customer
+              setNewEngagementDefaults({
+                customer: customerPrompt.name,
+                customerId: customerPrompt.id,
+              });
+              setShowNewModal(true);
+              setPage("pipeline");
+            }}
           />
         ) : page === "pipeline" ? (
           <PipelinePage
             onSelectEngagement={handleSelectEngagement}
             onNewEngagement={() => setShowNewModal(true)}
+            personFilter={pipelinePersonFilter}
+            onClearPersonFilter={() => setPipelinePersonFilter(null)}
           />
         ) : page === "engagements" ? (
           <EngagementsPage
@@ -181,28 +193,45 @@ function AppShell() {
         ) : page === "issues" ? (
           <IssuesPage onSelectEngagement={handleSelectEngagement} />
         ) : page === "team" ? (
-          <TeamPage />
+          <TeamPage
+            onFilterByPerson={(email) => {
+              setPipelinePersonFilter(email);
+              setPage("pipeline");
+            }}
+          />
         ) : page === "sharelinks" ? (
           <ShareLinksPage />
         ) : page === "settings" ? (
-          <div style={{ padding: "24px 28px 48px" }}>
-            <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 8 }}>Settings</h1>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Platform configuration and integration status.</p>
+          <div style={{ padding: "24px 28px 48px", maxWidth: 680 }}>
+            <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 4 }}>Settings</h1>
+            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Platform configuration and status.</p>
 
-            {/* Security */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 4 }}>🔒 Firestore security rules</h3>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>Rules are written and committed. Deploy them once to lock down the database.</p>
-              <div style={{ background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-second)" }}>
-                firebase deploy --only firestore:rules,firestore:indexes
+            {/* Security status */}
+            <div style={{ background: "var(--surface)", border: "1px solid var(--green)", borderRadius: "var(--radius-lg)", padding: "16px 20px", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ color: "var(--green)", fontSize: 16 }}>✓</span>
+                <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, color: "var(--green)" }}>Firestore security rules deployed</h3>
               </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Database is locked down to @safetyculture.io accounts. Indexes deployed. Rules last updated 20 Apr 2026.</p>
+            </div>
+
+            {/* File storage */}
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px 20px", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ color: "var(--amber)", fontSize: 16 }}>◐</span>
+                <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14 }}>File uploads — Blaze plan required</h3>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Task file attachments and customer document uploads require Firebase Storage (Blaze pay-as-you-go plan). UI is in place — upgrade Firebase to activate. Storage rules are written and committed, ready to deploy.</p>
             </div>
 
             {/* Data seed */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px", marginBottom: 16 }}>
-              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 4 }}>🌱 EMEA data seed</h3>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>11 EMEA engagements ready to seed from Glean data. Requires Firebase Admin service account key.</p>
-              <div style={{ background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontFamily: "monospace", fontSize: 12, color: "var(--text-second)" }}>
+            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px 20px", marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <span style={{ color: "var(--text-muted)", fontSize: 16 }}>○</span>
+                <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14 }}>EMEA data seed</h3>
+              </div>
+              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>11 EMEA engagements ready to seed. Requires Firebase Admin service account key.</p>
+              <div style={{ background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontFamily: "monospace", fontSize: 11, color: "var(--text-second)", lineHeight: 1.8 }}>
                 1. Firebase console → Project Settings → Service accounts → Generate new private key{"\n"}
                 2. Save as scripts/serviceAccount.json{"\n"}
                 3. node scripts/seed-emea.mjs
@@ -211,20 +240,32 @@ function AppShell() {
 
             {/* Roadmap */}
             <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px" }}>
-              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 8 }}>🗺 Roadmap</h3>
-              <ul style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 2.2, listStyle: "none" }}>
-                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Customer lifecycle management (7 stages)</li>
-                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Data capture forms (all stages)</li>
-                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Integration portfolio per customer</li>
-                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Integration spec export (.docx)</li>
-                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Customer dashboard with shareable view</li>
-                <li><span style={{ color: "var(--green)", marginRight: 8 }}>✓</span>Role-based access (CSE / CSM / COM / AE / TA)</li>
-                <li><span style={{ color: "var(--amber)", marginRight: 8 }}>◐</span>Firestore security rules (written, needs deploy)</li>
-                <li><span style={{ color: "var(--amber)", marginRight: 8 }}>◐</span>EMEA data seed (needs service account key)</li>
-                <li><span style={{ color: "var(--text-muted)", marginRight: 8 }}>○</span>Salesforce sync — auto-pull CS Requests</li>
-                <li><span style={{ color: "var(--text-muted)", marginRight: 8 }}>○</span>Jira sync — live ticket status updates</li>
-                <li><span style={{ color: "var(--text-muted)", marginRight: 8 }}>○</span>Email notifications — overdue tasks & stage advances</li>
-              </ul>
+              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 12 }}>🗺 Roadmap</h3>
+              {[
+                { done: true,  label: "Customer lifecycle management (7 stages)" },
+                { done: true,  label: "Data capture forms (all stages)" },
+                { done: true,  label: "Integration portfolio per customer" },
+                { done: true,  label: "Integrations page — grouped by type, search, drill-through" },
+                { done: true,  label: "Customer share links with task interaction" },
+                { done: true,  label: "Role-based access (CSE / CSM / COM / AE / TA / Admin)" },
+                { done: true,  label: "Firestore security rules + indexes deployed" },
+                { done: true,  label: "Task notes & internal file attach (UI ready)" },
+                { done: true,  label: "My Dashboard — calendar, task list, call prep" },
+                { amber: true, label: "File uploads — waiting on Blaze plan upgrade" },
+                { amber: true, label: "EMEA data seed — needs service account key" },
+                { done: false, label: "Salesforce sync — auto-pull CS Requests" },
+                { done: false, label: "Jira sync — live ticket status in engagement view" },
+                { done: false, label: "Email notifications — overdue tasks & stage advances" },
+                { done: false, label: "Global search (Cmd+K)" },
+                { done: false, label: "Stage completion gates — warn on required tasks" },
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < 15 ? "1px solid var(--border)" : "none" }}>
+                  <span style={{ color: item.done ? "var(--green)" : item.amber ? "var(--amber)" : "var(--text-muted)", fontSize: 13, flexShrink: 0 }}>
+                    {item.done ? "✓" : item.amber ? "◐" : "○"}
+                  </span>
+                  <span style={{ fontSize: 13, color: item.done ? "var(--text-second)" : "var(--text-primary)" }}>{item.label}</span>
+                </div>
+              ))}
             </div>
           </div>
         ) : null}
@@ -232,7 +273,8 @@ function AppShell() {
 
       <EngagementModal
         open={showNewModal}
-        onClose={() => setShowNewModal(false)}
+        onClose={() => { setShowNewModal(false); setNewEngagementDefaults(null); }}
+        initial={newEngagementDefaults}
         users={users}
         customers={customers}
       />

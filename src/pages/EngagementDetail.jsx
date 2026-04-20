@@ -791,13 +791,32 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
     const idx = stageKeys.indexOf(engagement.currentStage);
     if (idx >= stageKeys.length - 1) return;
     const nextKey = stageKeys[idx + 1];
-    const updates = { currentStage: nextKey };
 
+    // Warn if required tasks in current stage are incomplete
+    const currentTasks = engagement.stageTasks?.[engagement.currentStage] || [];
+    const incompleteRequired = currentTasks.filter(t => t.required && !t.done);
+    if (incompleteRequired.length > 0) {
+      const taskList = incompleteRequired.map(t => `· ${t.title}`).join("\n");
+      const confirmed = window.confirm(
+        `${incompleteRequired.length} required task${incompleteRequired.length !== 1 ? "s" : ""} in this stage ${incompleteRequired.length !== 1 ? "are" : "is"} not yet complete:\n\n${taskList}\n\nAdvance anyway?`
+      );
+      if (!confirmed) return;
+    }
+
+    const updates = { currentStage: nextKey };
     if (!(engagement.stageTasks?.[nextKey]?.length)) {
-      // Start next stage the working day after current stage ends (or today)
       const currentEnd = stageEndDate(engagement.stageTasks?.[engagement.currentStage] || []);
       const nextStart = currentEnd ? workingDayAdd(currentEnd, 1) : todayIso();
       updates[`stageTasks.${nextKey}`] = buildDefaultTasks(nextKey, nextStart);
+
+      // Pre-assign CSE email to CSE-owned tasks in next stage
+      if (engagement.cseEmail && updates[`stageTasks.${nextKey}`]) {
+        updates[`stageTasks.${nextKey}`] = updates[`stageTasks.${nextKey}`].map(t =>
+          (t.owner === "cse" || t.ownerRole === "cse")
+            ? { ...t, ownerEmail: engagement.cseEmail }
+            : t
+        );
+      }
     }
     await save(updates);
     setActiveStage(nextKey);

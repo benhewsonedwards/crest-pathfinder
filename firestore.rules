@@ -39,6 +39,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ─── /customers/activity ──────────────────────────────────────────────────
+    // Customer-level notes — append-only for team members
+    match /customers/{customerId}/activity/{activityId} {
+      allow read:   if isViewer();
+      allow create: if isTeamMember();
+      allow update: if false; // immutable
+      allow delete: if isAdmin();
+    }
+
     // ─── /integrations ────────────────────────────────────────────────────────
     match /integrations/{integrationId} {
       allow read:   if isViewer()

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {
-  collection, onSnapshot, query, where,
-  doc, updateDoc, deleteDoc, serverTimestamp
+  collection, onSnapshot, query, where, orderBy,
+  doc, addDoc, updateDoc, deleteDoc, serverTimestamp
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
@@ -307,7 +307,7 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
 
 // ─── Main customer dashboard ──────────────────────────────────────────────────
 export default function CustomerDashboard({ customer, onBack, users, onEditCustomer, onSelectEngagement }) {
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const [integrations, setIntegrations] = useState([]);
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -318,6 +318,10 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
   const [showDeleteCustomer, setShowDeleteCustomer] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showShareable, setShowShareable] = useState(false);
+  // Activity log
+  const [activityEntries, setActivityEntries] = useState([]);
+  const [activityText, setActivityText] = useState("");
+  const [postingActivity, setPostingActivity] = useState(false);
 
   const canEdit = ["super_admin", "admin", "cse"].includes(profile?.role);
   const { toasts, toast } = useToast();
@@ -341,8 +345,27 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
         return [...prev, ...newOnes];
       })
     );
-    return () => { u1(); u2(); u3(); };
+    // Customer activity log
+    const u4 = onSnapshot(
+      query(collection(db, "customers", customer.id, "activity"), orderBy("createdAt", "desc")),
+      s => setActivityEntries(s.docs.map(d => ({ id: d.id, ...d.data() })))
+    );
+    return () => { u1(); u2(); u3(); u4(); };
   }, [customer?.id, customer?.name]);
+
+  async function postActivity() {
+    if (!activityText.trim() || !user) return;
+    setPostingActivity(true);
+    await addDoc(collection(db, "customers", customer.id, "activity"), {
+      text: activityText.trim(),
+      authorName: user.displayName,
+      authorPhoto: user.photoURL,
+      authorUid: user.uid,
+      createdAt: serverTimestamp(),
+    });
+    setActivityText("");
+    setPostingActivity(false);
+  }
 
   // Ticket stats
   const allTickets = integrations.flatMap(i => (i.tickets || []).map(t => ({ ...t, integrationName: i.name })));
@@ -453,10 +476,11 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
 
       {/* Tabs */}
       <Tabs tabs={[
-        { id: "overview", label: "Overview" },
+        { id: "overview",     label: "Overview" },
         { id: "integrations", label: "Integrations", badge: integrations.length || null },
-        { id: "tickets", label: "Request history", badge: openTickets.length || null },
-        { id: "engagements", label: "Engagements", badge: engagements.length || null },
+        { id: "tickets",      label: "Request history", badge: openTickets.length || null },
+        { id: "engagements",  label: "Engagements", badge: engagements.length || null },
+        { id: "activity",     label: "Activity log" },
       ]} active={tab} onChange={setTab} style={{ marginBottom: 18 }} />
 
       {/* ── OVERVIEW ── */}
@@ -752,6 +776,76 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
                 );
               })}
             </Card>
+          )}
+        </div>
+      )}
+
+      {/* ── ACTIVITY LOG ── */}
+      {tab === "activity" && (
+        <div>
+          {/* New entry composer */}
+          <Card style={{ marginBottom: 14 }}>
+            <div style={{ padding: "14px 18px" }}>
+              <Label style={{ marginBottom: 8, display: "block" }}>Add note</Label>
+              <Textarea
+                value={activityText}
+                onChange={e => setActivityText(e.target.value)}
+                placeholder="Account notes, relationship context, renewal signals, product feedback, exec conversations..."
+                rows={3}
+                style={{ marginBottom: 10 }}
+                onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) postActivity(); }}
+              />
+              <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                <Btn onClick={postActivity} disabled={!activityText.trim() || postingActivity} size="sm">
+                  {postingActivity ? "Posting..." : "Add note"}
+                </Btn>
+              </div>
+            </div>
+          </Card>
+
+          {/* Entry list */}
+          {activityEntries.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-muted)" }}>
+              <p style={{ fontSize: 32, marginBottom: 8 }}>📝</p>
+              <p style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)", marginBottom: 4 }}>No notes yet</p>
+              <p style={{ fontSize: 13 }}>Use this log for account notes, renewal signals, exec conversations, and anything that doesn't belong on a specific task.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {activityEntries.map(entry => {
+                const ts = entry.createdAt?.toDate ? entry.createdAt.toDate() : new Date(entry.createdAt || 0);
+                return (
+                  <Card key={entry.id} style={{ padding: "14px 18px" }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      {/* Avatar */}
+                      <div style={{
+                        width: 30, height: 30, borderRadius: "50%", flexShrink: 0,
+                        background: "var(--purple-light)", display: "flex", alignItems: "center",
+                        justifyContent: "center", overflow: "hidden",
+                      }}>
+                        {entry.authorPhoto
+                          ? <img src={entry.authorPhoto} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+                          : <span style={{ fontSize: 11, fontWeight: 700, color: "var(--purple)" }}>
+                              {entry.authorName?.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                            </span>
+                        }
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)" }}>{entry.authorName}</span>
+                          <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                            {ts.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                            {" · "}
+                            {ts.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{entry.text}</p>
+                      </div>
+                    </div>
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </div>
       )}

@@ -242,7 +242,9 @@ function CustomerPicker({ customers, value, customerId, onChange, onCreateCustom
 export default function EngagementModal({ open, onClose, initial, users, customers = [], engagements = [] }) {
   const { user } = useAuth();
   const isEdit = !!initial?.id;
-  const [form, setForm] = useState(initial ? { ...BLANK, ...initial } : { ...BLANK });
+  // Default cseEmail to logged-in user's email when creating a new engagement
+  const defaultCseEmail = !isEdit && user?.email ? user.email : "";
+  const [form, setForm] = useState(initial ? { ...BLANK, ...initial } : { ...BLANK, cseEmail: defaultCseEmail });
   const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("core");
 
@@ -262,7 +264,17 @@ export default function EngagementModal({ open, onClose, initial, users, custome
       if (isEdit) {
         await updateDoc(doc(db, "engagements", initial.id), { ...form, updatedAt: serverTimestamp() });
       } else {
+        // Build default tasks and pre-assign CSE email to CSE-owned tasks
         const stageTasks = buildAllStageTasks(todayIso(), form.planType);
+        if (form.cseEmail) {
+          Object.keys(stageTasks).forEach(sk => {
+            stageTasks[sk] = stageTasks[sk].map(t =>
+              (t.owner === "cse" || t.ownerRole === "cse")
+                ? { ...t, ownerEmail: form.cseEmail }
+                : t
+            );
+          });
+        }
         await addDoc(collection(db, "engagements"), {
           ...form, stageTasks, createdBy: user.uid,
           createdAt: serverTimestamp(), updatedAt: serverTimestamp(),

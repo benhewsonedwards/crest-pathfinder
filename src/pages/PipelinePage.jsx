@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, fmtDate, timeAgo } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, EmptyState, Btn, Spinner, useSortable, SortableHeader } from "../components/UI";
+import { Card, CardHeader, Label, Pill, Avatar, EmptyState, Btn, Spinner, Input, useSortable, SortableHeader } from "../components/UI";
+import { PEOPLE } from "../lib/people";
 
 function StatCard({ label, value, colour, icon }) {
   return (
@@ -58,11 +59,12 @@ function StageFunnel({ engagements, onStageClick, activeFilter }) {
   );
 }
 
-export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
+export default function PipelinePage({ onSelectEngagement, onNewEngagement, personFilter, onClearPersonFilter }) {
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [stageFilter, setStageFilter] = useState(null);
   const [ragFilter, setRagFilter] = useState(null);
+  const [search, setSearch] = useState("");
   const { sortKey, sortDir, toggle, sort } = useSortable("updatedAt", "desc");
 
   function getSortValue(e, key) {
@@ -90,6 +92,11 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
   const filtered = engagements.filter(e => {
     if (stageFilter && e.currentStage !== stageFilter) return false;
     if (ragFilter && e.ragStatus !== ragFilter) return false;
+    if (personFilter && e.cseEmail !== personFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return [e.customer, e.csId, e.region, e.cseEmail].some(v => v?.toLowerCase().includes(q));
+    }
     return true;
   });
 
@@ -122,11 +129,33 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
         <StatCard label="In delivery" value={inDelivery} colour="var(--blue)" icon="⚙️" />
       </div>
 
+      {/* Person filter banner */}
+      {personFilter && (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 10, marginBottom: 16,
+          padding: "10px 16px", borderRadius: "var(--radius)",
+          background: "var(--purple-light)", border: "1px solid var(--purple)",
+        }}>
+          <span style={{ fontSize: 13, color: "var(--purple)", fontWeight: 600 }}>
+            👤 Filtered by: {PEOPLE.find(p => p.email === personFilter)?.name || personFilter}
+          </span>
+          <button onClick={onClearPersonFilter} style={{
+            marginLeft: "auto", fontSize: 11, padding: "3px 10px", borderRadius: 999,
+            border: "1px solid var(--purple)", background: "transparent",
+            color: "var(--purple)", cursor: "pointer", fontFamily: "inherit",
+          }}>Clear</button>
+        </div>
+      )}
+
       {/* Stage funnel */}
       <StageFunnel engagements={engagements} onStageClick={setStageFilter} activeFilter={stageFilter} />
 
-      {/* Filters */}
-      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+      {/* Filters + search */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap", alignItems: "center" }}>
+        <div style={{ position: "relative" }}>
+          <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)", fontSize: 12 }}>🔍</span>
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customer, CS ID..." style={{ paddingLeft: 28, width: 220, fontSize: 12 }} />
+        </div>
         {[null, "amber", "red"].map(r => (
           <button key={r || "all"} onClick={() => setRagFilter(r)} style={{
             padding: "4px 12px", borderRadius: 999, fontSize: 11, fontWeight: 600,
@@ -137,8 +166,8 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
             {r === null ? "All" : r === "amber" ? "🟠 At risk" : "🔴 Off track"}
           </button>
         ))}
-        {(stageFilter || ragFilter) && (
-          <button onClick={() => { setStageFilter(null); setRagFilter(null); }} style={{
+        {(stageFilter || ragFilter || search) && (
+          <button onClick={() => { setStageFilter(null); setRagFilter(null); setSearch(""); }} style={{
             padding: "4px 12px", borderRadius: 999, fontSize: 11, cursor: "pointer",
             border: "1px solid var(--red)", color: "var(--red)", background: "var(--red-light)",
           }}>
@@ -161,11 +190,20 @@ export default function PipelinePage({ onSelectEngagement, onNewEngagement }) {
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState
-            icon="📋" title="No engagements yet"
-            description="Create your first engagement to start tracking the customer lifecycle"
-            action={<Btn onClick={onNewEngagement}>+ New engagement</Btn>}
-          />
+          engagements.length === 0 ? (
+            <EmptyState
+              icon="📋" title="No engagements yet"
+              description="Create your first engagement to start tracking the customer lifecycle"
+              action={<Btn onClick={onNewEngagement}>+ New engagement</Btn>}
+            />
+          ) : (
+            <div style={{ padding: "28px 18px", textAlign: "center" }}>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 10 }}>No engagements match your filters.</p>
+              <button onClick={() => { setStageFilter(null); setRagFilter(null); setSearch(""); }} style={{
+                fontSize: 12, color: "var(--purple)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit"
+              }}>Clear filters</button>
+            </div>
+          )
         ) : (
           sort(filtered, getSortValue).map((e, i, arr) => {
             const stage = STAGES.find(s => s.key === e.currentStage);

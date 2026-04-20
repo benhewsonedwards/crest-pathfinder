@@ -3,7 +3,13 @@ import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { STAGES, STAGE_KEYS, RAG_STATUSES, fmtDate } from "../lib/constants";
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Spinner, EmptyState, useSortable, SortableHeader } from "../components/UI";
+import { PEOPLE } from "../lib/people";
 
+function cseNameFromEmail(email) {
+  if (!email) return "—";
+  const p = PEOPLE.find(p => p.email === email);
+  return p ? p.name.split(" ")[0] : email.split("@")[0];
+}
 function getIssueFlags(engagement) {
   const today = new Date();
   const updated = engagement.updatedAt?.toDate ? engagement.updatedAt.toDate() : new Date(engagement.updatedAt || 0);
@@ -112,7 +118,7 @@ export default function IssuesPage({ onSelectEngagement }) {
                       <span style={{ fontSize: 12 }}>{stage?.icon}</span>
                       <span style={{ fontSize: 11, color: stage?.colour, fontWeight: 600 }}>{stage?.shortLabel}</span>
                     </div>
-                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{e.cseUid ? "Assigned" : "—"}</span>
+                    <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{cseNameFromEmail(e.cseEmail)}</span>
                     <Pill color={rag.key==="green"?"green":rag.key==="red"?"red":"amber"} style={{ fontSize: 10 }}>{rag.emoji}</Pill>
                     <span style={{ fontSize: 11, color: daysSince >= 14 ? "var(--red)" : "var(--text-muted)", fontWeight: daysSince >= 14 ? 600 : 400 }}>
                       {daysSince !== null ? `${daysSince}d ago` : "—"}

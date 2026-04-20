@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { createShareLink, deactivateShareLink, reactivateShareLink, shareUrl } from "../lib/shareLinks";
 import { Card, CardHeader, Label, Pill, Btn, Spinner, Modal, FieldGroup, Input } from "../components/UI";
@@ -50,6 +50,13 @@ export default function ShareLinksPage() {
   const [toggling, setToggling] = useState({}); // { linkId: true }
 
   const isAdmin = ["super_admin", "admin", "cse", "com"].includes(profile?.role);
+  const [editingLabel, setEditingLabel] = useState(null); // { id, value }
+
+  async function saveLabel(linkId) {
+    if (!editingLabel || editingLabel.id !== linkId) return;
+    await updateDoc(doc(db, "shareLinks", linkId), { label: editingLabel.value.trim() });
+    setEditingLabel(null);
+  }
 
   useEffect(() => {
     // Load share links realtime
@@ -157,7 +164,29 @@ export default function ShareLinksPage() {
                   borderBottom: i < activeLinks.length - 1 ? "1px solid var(--border)" : "none",
                 }}>
                   <div>
-                    <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>{link.label || link.customerName}</p>
+                    {editingLabel?.id === link.id ? (
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        <input
+                          value={editingLabel.value}
+                          onChange={e => setEditingLabel(l => ({ ...l, value: e.target.value }))}
+                          onKeyDown={e => { if (e.key === "Enter") saveLabel(link.id); if (e.key === "Escape") setEditingLabel(null); }}
+                          autoFocus
+                          style={{ fontSize: 13, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--purple)", background: "var(--surface)", color: "var(--text-primary)", fontFamily: "inherit", outline: "none", minWidth: 0, flex: 1 }}
+                        />
+                        <button onClick={() => saveLabel(link.id)} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "none", background: "var(--purple)", color: "white", cursor: "pointer", fontFamily: "inherit" }}>Save</button>
+                        <button onClick={() => setEditingLabel(null)} style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>{link.label || link.customerName}</p>
+                        {isAdmin && (
+                          <button onClick={() => setEditingLabel({ id: link.id, value: link.label || link.customerName || "" })}
+                            style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", cursor: "pointer", fontFamily: "inherit", flexShrink: 0 }}>
+                            edit
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <p style={{ fontSize: 11, color: "var(--text-muted)", fontFamily: "monospace" }}>
                       {shareUrl(link.token).replace(window.location.origin, "")}
                     </p>

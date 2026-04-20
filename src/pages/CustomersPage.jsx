@@ -57,6 +57,7 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
   const [editTarget, setEditTarget] = useState(null);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [newCustomerPrompt, setNewCustomerPrompt] = useState(null); // { id, name } after creation
 
   const canEdit = ["super_admin", "admin", "cse", "csm", "com"].includes(profile?.role);
   const { sortKey, sortDir, toggle, sort } = useSortable("name");
@@ -187,12 +188,15 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
       await updateDoc(doc(db, "customers", editTarget.id), {
         ...form, updatedAt: serverTimestamp(),
       });
+      closeModal();
     } else {
-      await addDoc(collection(db, "customers"), {
+      const ref = await addDoc(collection(db, "customers"), {
         ...form, createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
       });
+      closeModal();
+      // Prompt to create first engagement
+      setNewCustomerPrompt({ id: ref.id, name: form.name });
     }
-    closeModal();
     setSaving(false);
   }
 
@@ -420,6 +424,34 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
           >
             {deleting ? "Deleting..." : "Delete customer"}
           </Btn>
+        </div>
+      </Modal>
+
+      {/* New customer → create engagement prompt */}
+      <Modal open={!!newCustomerPrompt} onClose={() => setNewCustomerPrompt(null)} title="Customer created" width={420}>
+        <div style={{ textAlign: "center", padding: "8px 0 16px" }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: "50%", background: "var(--green-light)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            margin: "0 auto 12px", fontSize: 22,
+          }}>✓</div>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 6 }}>
+            {newCustomerPrompt?.name} created
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>
+            Would you like to create an engagement for this customer now?
+          </p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+            <Btn variant="ghost" onClick={() => setNewCustomerPrompt(null)}>
+              Not yet
+            </Btn>
+            <Btn onClick={() => {
+              if (onNewCustomer) onNewCustomer(newCustomerPrompt);
+              setNewCustomerPrompt(null);
+            }}>
+              Create engagement →
+            </Btn>
+          </div>
         </div>
       </Modal>
     </div>
