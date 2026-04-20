@@ -1,299 +1,208 @@
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, serverTimestamp, query, orderBy } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
-import { ROLES, JOB_FUNCTIONS } from "../lib/constants";
-import { Card, CardHeader, Label, Pill, Avatar, Btn, Select, Input, Modal, FieldGroup, Spinner, EmptyState, useSortable, SortableHeader } from "../components/UI";
+import { ROLES as APP_ROLES } from "../lib/constants";
+import { Card, CardHeader, Label, Pill, Avatar, Btn, Select, Modal, FieldGroup, Spinner } from "../components/UI";
+import { PEOPLE } from "../lib/people";
 
-function RolePill({ role }) {
-  const colours = {
-    super_admin: "red", admin: "orange", cse: "purple", csm: "teal",
-    com: "blue", ae: "amber", ta: "green", viewer: "grey",
-  };
-  return <Pill color={colours[role] || "grey"} style={{ fontSize: 10, textTransform: "capitalize" }}>{role?.replace("_", " ")}</Pill>;
+const ORG = [
+  {
+    key: "csi", name: "Solutions & Implementation",
+    manager: "edwin.davidian@safetyculture.io", colour: "var(--purple)",
+    members: PEOPLE.filter(p => p.team === "Solutions & Implementation"),
+  },
+  {
+    key: "cs", name: "Customer Success",
+    manager: "pascale.radford@safetyculture.io", colour: "var(--green)",
+    members: PEOPLE.filter(p => p.team === "Customer Success"),
+  },
+  {
+    key: "sales", name: "Sales EMEA",
+    manager: null, colour: "var(--amber)",
+    members: PEOPLE.filter(p => p.team === "Sales EMEA"),
+  },
+];
+
+const ROLE_COLOUR = { cse: "purple", com: "blue", im: "teal", csm: "green", ae: "amber", manager: "grey" };
+const ROLE_LABEL  = { cse: "CSE", com: "COM", im: "IM", csm: "CSM", ae: "AE", manager: "Manager" };
+const APP_ROLE_COLOUR = { super_admin: "red", admin: "orange", cse: "purple", csm: "teal", com: "blue", ae: "amber", viewer: "grey" };
+
+function RolePill({ roleKey }) {
+  return <Pill color={ROLE_COLOUR[roleKey] || "grey"} style={{ fontSize: 10 }}>{ROLE_LABEL[roleKey] || roleKey}</Pill>;
+}
+function AppRolePill({ role }) {
+  return <Pill color={APP_ROLE_COLOUR[role] || "grey"} style={{ fontSize: 10 }}>{role?.replace("_", " ")}</Pill>;
+}
+
+function PersonRow({ person, fbUser, isAdmin, onEdit, teamColour, showTeam }) {
+  const initials = person.initials || person.name.split(" ").map(n => n[0]).join("").slice(0, 2);
+  const cols = showTeam
+    ? "36px 1fr 100px 80px 100px 120px 80px"
+    : "36px 1fr 80px 100px 120px 80px";
+
+  return (
+    <div style={{
+      display: "grid", gridTemplateColumns: cols,
+      gap: 12, padding: "10px 18px", alignItems: "center",
+      borderBottom: "1px solid var(--border)", opacity: fbUser ? 1 : 0.72,
+    }}>
+      <div style={{ position: "relative" }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: "50%",
+          background: (teamColour || "var(--purple)") + "25",
+          color: teamColour || "var(--purple)",
+          fontSize: 10, fontWeight: 700,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          overflow: "hidden",
+        }}>
+          {fbUser?.photoURL
+            ? <img src={fbUser.photoURL} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="" />
+            : initials}
+        </div>
+        {fbUser && (
+          <div style={{ position: "absolute", bottom: 0, right: 0, width: 8, height: 8, borderRadius: "50%", background: "var(--green)", border: "1.5px solid var(--surface)" }} title="Signed in" />
+        )}
+      </div>
+      <div>
+        <p style={{ fontSize: 13, fontWeight: 500, marginBottom: 1 }}>{person.name}</p>
+        <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{person.email}</p>
+      </div>
+      {showTeam && <span style={{ fontSize: 11, color: "var(--text-second)" }}>{person.team}</span>}
+      <span style={{ fontSize: 11, color: "var(--text-second)" }}>{person.location}</span>
+      <RolePill roleKey={person.roleKey} />
+      {fbUser
+        ? <AppRolePill role={fbUser.role} />
+        : <span style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>not signed in yet</span>}
+      <div>{isAdmin && fbUser && <Btn size="sm" variant="ghost" onClick={() => onEdit(fbUser)}>Edit</Btn>}</div>
+    </div>
+  );
+}
+
+function TeamCard({ team, fbUsers, isAdmin, onEdit }) {
+  const [open, setOpen] = useState(true);
+  const manager = team.manager ? team.members.find(p => p.email === team.manager) : null;
+  const rest = team.members.filter(p => p.email !== team.manager);
+  const signedIn = team.members.filter(p => fbUsers.find(u => u.email === p.email)).length;
+
+  return (
+    <Card style={{ marginBottom: 12 }}>
+      <CardHeader>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", flex: 1 }} onClick={() => setOpen(o => !o)}>
+          <div style={{ width: 10, height: 10, borderRadius: "50%", background: team.colour, flexShrink: 0 }} />
+          <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, color: team.colour }}>{team.name}</span>
+          <Pill color="grey" style={{ fontSize: 10 }}>{team.members.length} people</Pill>
+          <Pill color="green" style={{ fontSize: 10 }}>{signedIn} signed in</Pill>
+          {manager && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>· Manager: {manager.name}</span>}
+        </div>
+        <span style={{ fontSize: 14, color: "var(--text-muted)", transform: open ? "rotate(180deg)" : "none", transition: ".2s" }}>⌄</span>
+      </CardHeader>
+      {open && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 100px 120px 80px", gap: 12, padding: "6px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+            <span /><Label>Name</Label><Label>Location</Label><Label>Team role</Label><Label>App access</Label><span />
+          </div>
+          {manager && (
+            <div style={{ background: team.colour + "08" }}>
+              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} />
+            </div>
+          )}
+          {rest.map(person => (
+            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} />
+          ))}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 export default function TeamPage() {
   const { profile } = useAuth();
-  const [users, setUsers] = useState([]);
-  const [teams, setTeams] = useState([]);
+  const [fbUsers, setFbUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
-  const [deleteUser, setDeleteUser] = useState(null);
-  const [deleteTeam, setDeleteTeam] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [newTeamName, setNewTeamName] = useState("");
-  const [addingTeam, setAddingTeam] = useState(false);
-  const [activeTab, setActiveTab] = useState("members");
-
+  const [tab, setTab] = useState("org");
   const isSuperAdmin = profile?.role === "super_admin";
   const isAdmin = ["super_admin", "admin"].includes(profile?.role);
-  const { sortKey: uSortKey, sortDir: uSortDir, toggle: uToggle, sort: uSort } = useSortable("displayName");
 
   useEffect(() => {
-    const unsub1 = onSnapshot(collection(db, "users"), snap => {
-      setUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
+    return onSnapshot(collection(db, "users"), snap => {
+      setFbUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
       setLoading(false);
     });
-    const unsub2 = onSnapshot(collection(db, "teams"), snap => {
-      setTeams(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => { unsub1(); unsub2(); };
   }, []);
 
-  async function updateUser(uid, updates) {
-    await updateDoc(doc(db, "users", uid), updates);
-  }
+  const signedIn = fbUsers.filter(u => PEOPLE.find(p => p.email === u.email)).length;
 
-  async function handleDeleteUser() {
-    if (!deleteUser?.uid) return;
-    setDeleting(true);
-    // Remove from all teams first
-    for (const t of teams) {
-      if (t.members?.includes(deleteUser.uid)) {
-        await updateDoc(doc(db, "teams", t.id), {
-          members: t.members.filter(m => m !== deleteUser.uid),
-        });
-      }
-    }
-    await deleteDoc(doc(db, "users", deleteUser.uid));
-    setDeleteUser(null);
-    setDeleting(false);
-  }
-
-  async function handleDeleteTeam() {
-    if (!deleteTeam?.id) return;
-    setDeleting(true);
-    await deleteDoc(doc(db, "teams", deleteTeam.id));
-    setDeleteTeam(null);
-    setDeleting(false);
-  }
-
-  async function addTeam() {
-    if (!newTeamName.trim()) return;
-    await addDoc(collection(db, "teams"), {
-      name: newTeamName.trim(), members: [], createdAt: serverTimestamp(),
-    });
-    setNewTeamName("");
-    setAddingTeam(false);
-  }
-
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}>
-      <Spinner size={28} />
-    </div>
-  );
+  if (loading) return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: 300 }}><Spinner size={28} /></div>;
 
   return (
     <div style={{ padding: "24px 28px 48px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <div>
-          <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 2 }}>Team & Hierarchy</h1>
-          <p style={{ fontSize: 13, color: "var(--text-muted)" }}>{users.length} members · {teams.length} teams</p>
-        </div>
-        {isAdmin && (
-          <Btn onClick={() => setAddingTeam(true)} variant="secondary">+ New team</Btn>
-        )}
+      <div style={{ marginBottom: 20 }}>
+        <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 4 }}>Team & Org Chart</h1>
+        <p style={{ fontSize: 13, color: "var(--text-muted)" }}>
+          {PEOPLE.length} people · {ORG.length} teams ·&nbsp;
+          <span style={{ color: "var(--green)" }}>{signedIn} signed in</span>
+          {PEOPLE.length - signedIn > 0 && <span style={{ color: "var(--text-muted)" }}> · {PEOPLE.length - signedIn} not yet signed in</span>}
+        </p>
       </div>
 
-      {/* Tab switcher */}
       <div style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: 20, gap: 2 }}>
-        {[["members", "Members"], ["teams", "Teams"]].map(([id, label]) => (
-          <button key={id} onClick={() => setActiveTab(id)} style={{
-            padding: "8px 16px", fontSize: 13, cursor: "pointer", background: "none",
-            border: "none", borderBottom: `2px solid ${activeTab===id?"var(--purple)":"transparent"}`,
-            color: activeTab===id?"var(--purple)":"var(--text-second)", fontWeight: activeTab===id?600:400,
-            fontFamily: "inherit", marginBottom: -1,
+        {[["org", "Org chart"], ["all", "All members"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{
+            padding: "8px 16px", fontSize: 13, cursor: "pointer", background: "none", border: "none",
+            borderBottom: `2px solid ${tab === id ? "var(--purple)" : "transparent"}`,
+            color: tab === id ? "var(--purple)" : "var(--text-second)",
+            fontWeight: tab === id ? 600 : 400, fontFamily: "inherit", marginBottom: -1,
           }}>{label}</button>
         ))}
       </div>
 
-      {/* Members tab */}
-      {activeTab === "members" && (
+      {tab === "org" && ORG.map(team => (
+        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} onEdit={setEditingUser} />
+      ))}
+
+      {tab === "all" && (
         <Card>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 100px", gap: 10, padding: "9px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-            <SortableHeader label="Member"   sortKey="displayName"   currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
-            <SortableHeader label="Function" sortKey="jobFunction"   currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
-            <SortableHeader label="Role"     sortKey="role"          currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
-            <SortableHeader label="Team"     sortKey="team"          currentKey={uSortKey} dir={uSortDir} onToggle={uToggle} />
-            <Label></Label>
+          <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 100px 80px 100px 120px 80px", gap: 12, padding: "6px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+            <span /><Label>Name</Label><Label>Team</Label><Label>Location</Label><Label>Role</Label><Label>App access</Label><span />
           </div>
-          {users.length === 0 ? (
-            <EmptyState icon="👥" title="No team members yet" description="Members will appear here once they sign in with their SafetyCulture Google account"/>
-          ) : uSort(users, (u, key) => {
-              if (key === "team") return teams.find(t => t.members?.includes(u.uid))?.name || "";
-              return (u[key] || "").toLowerCase();
-            }).map((u, i, arr) => (
-            <div key={u.uid} style={{
-              display: "grid", gridTemplateColumns: "1fr 100px 120px 120px 100px",
-              gap: 10, padding: "11px 18px", borderBottom: i < arr.length-1 ? "1px solid var(--border)" : "none",
-              alignItems: "center",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <Avatar name={u.displayName} photoURL={u.photoURL} size={32}/>
-                <div>
-                  <p style={{ fontSize: 13, fontWeight: 500 }}>{u.displayName}</p>
-                  <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{u.email}</p>
-                </div>
-              </div>
-              <span style={{ fontSize: 12, color: "var(--text-second)" }}>{u.jobFunction || "—"}</span>
-              <RolePill role={u.role}/>
-              <span style={{ fontSize: 12, color: "var(--text-second)" }}>
-                {teams.find(t => t.members?.includes(u.uid))?.name || "—"}
-              </span>
-              {isAdmin && (
-                <div style={{ display: "flex", gap: 6 }}>
-                  <Btn size="sm" variant="ghost" onClick={() => setEditingUser(u)}>Edit</Btn>
-                  <button
-                    onClick={() => setDeleteUser(u)}
-                    style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "3px 8px", fontFamily: "inherit", transition: "all 0.13s" }}
-                    onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
-                    onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                  >✕</button>
-                </div>
-              )}
-            </div>
+          {PEOPLE.map((person, i) => (
+            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={setEditingUser}
+              teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} />
           ))}
         </Card>
       )}
 
-      {/* Teams tab */}
-      {activeTab === "teams" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {teams.length === 0 ? (
-            <EmptyState icon="🏢" title="No teams yet" description="Create teams to organise your members" action={isAdmin && <Btn onClick={() => setAddingTeam(true)}>+ New team</Btn>}/>
-          ) : teams.map(team => {
-            const members = users.filter(u => team.members?.includes(u.uid));
-            return (
-              <Card key={team.id}>
-                <CardHeader>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13 }}>{team.name}</span>
-                    <Pill color="grey" style={{ fontSize: 10 }}>{members.length} member{members.length !== 1 ? "s" : ""}</Pill>
-                  </div>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setDeleteTeam(team)}
-                      style={{ background: "none", border: "1px solid var(--border)", borderRadius: "var(--radius-sm)", cursor: "pointer", color: "var(--text-muted)", fontSize: 11, padding: "3px 10px", fontFamily: "inherit", transition: "all 0.13s" }}
-                      onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--red)"; e.currentTarget.style.color = "var(--red)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-muted)"; }}
-                    >Delete team</button>
-                  )}
-                </CardHeader>
-                <div style={{ padding: "12px 18px" }}>
-                  {members.length === 0 ? (
-                    <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No members yet</p>
-                  ) : (
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                      {members.map(u => (
-                        <div key={u.uid} style={{ display: "flex", alignItems: "center", gap: 6, background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "5px 10px" }}>
-                          <Avatar name={u.displayName} photoURL={u.photoURL} size={22}/>
-                          <span style={{ fontSize: 12 }}>{u.displayName}</span>
-                          <RolePill role={u.role}/>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Edit user modal */}
       <Modal open={!!editingUser} onClose={() => setEditingUser(null)} title={`Edit — ${editingUser?.displayName}`} width={440}>
         {editingUser && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18, padding: "12px 14px", background: "var(--surface2)", borderRadius: "var(--radius)" }}>
-              <Avatar name={editingUser.displayName} photoURL={editingUser.photoURL} size={40}/>
+              {editingUser.photoURL
+                ? <img src={editingUser.photoURL} style={{ width: 40, height: 40, borderRadius: "50%" }} alt="" />
+                : <Avatar name={editingUser.displayName} size={40} />}
               <div>
                 <p style={{ fontWeight: 600 }}>{editingUser.displayName}</p>
                 <p style={{ fontSize: 12, color: "var(--text-muted)" }}>{editingUser.email}</p>
+                {editingUser.title && <p style={{ fontSize: 11, color: "var(--text-muted)" }}>{editingUser.title}</p>}
               </div>
             </div>
-            <FieldGroup label="Role">
+            <FieldGroup label="App role">
               <Select value={editingUser.role || "viewer"} onChange={e => setEditingUser(u => ({ ...u, role: e.target.value }))}>
-                {ROLES.filter(r => isSuperAdmin || r.key !== "super_admin").map(r => (
+                {APP_ROLES.filter(r => isSuperAdmin || r.key !== "super_admin").map(r => (
                   <option key={r.key} value={r.key}>{r.label} — {r.description}</option>
                 ))}
               </Select>
             </FieldGroup>
-            <FieldGroup label="Job function">
-              <Select value={editingUser.jobFunction || ""} onChange={e => setEditingUser(u => ({ ...u, jobFunction: e.target.value }))}>
-                <option value="">— select —</option>
-                {JOB_FUNCTIONS.map(j => <option key={j}>{j}</option>)}
-              </Select>
-            </FieldGroup>
-            <FieldGroup label="Team">
-              <Select value={teams.find(t => t.members?.includes(editingUser.uid))?.id || ""} onChange={async e => {
-                // Remove from all teams, then add to selected
-                for (const t of teams) {
-                  if (t.members?.includes(editingUser.uid)) {
-                    await updateDoc(doc(db, "teams", t.id), { members: t.members.filter(m => m !== editingUser.uid) });
-                  }
-                }
-                if (e.target.value) {
-                  const team = teams.find(t => t.id === e.target.value);
-                  await updateDoc(doc(db, "teams", e.target.value), { members: [...(team.members || []), editingUser.uid] });
-                }
-              }}>
-                <option value="">— no team —</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </Select>
-            </FieldGroup>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
+            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 6, marginBottom: 16, lineHeight: 1.5 }}>
+              Team, location and title are synced from the people directory and cannot be edited here.
+            </p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <Btn variant="ghost" onClick={() => setEditingUser(null)}>Cancel</Btn>
-              <Btn onClick={async () => {
-                await updateUser(editingUser.uid, { role: editingUser.role, jobFunction: editingUser.jobFunction });
-                setEditingUser(null);
-              }}>Save changes</Btn>
+              <Btn onClick={async () => { await updateDoc(doc(db, "users", editingUser.uid), { role: editingUser.role }); setEditingUser(null); }}>Save changes</Btn>
             </div>
           </div>
         )}
-      </Modal>
-
-      {/* New team modal */}
-      <Modal open={addingTeam} onClose={() => setAddingTeam(false)} title="New team" width={380}>
-        <FieldGroup label="Team name" required>
-          <Input value={newTeamName} onChange={e => setNewTeamName(e.target.value)} placeholder="e.g. EMEA CS&I"/>
-        </FieldGroup>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 16 }}>
-          <Btn variant="ghost" onClick={() => setAddingTeam(false)}>Cancel</Btn>
-          <Btn onClick={addTeam} disabled={!newTeamName.trim()}>Create team</Btn>
-        </div>
-      </Modal>
-
-      {/* Delete user confirm */}
-      <Modal open={!!deleteUser} onClose={() => setDeleteUser(null)} title="Remove team member" width={420}>
-        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
-          Are you sure you want to remove <strong>{deleteUser?.displayName}</strong> from CREST Pathfinder?
-        </p>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
-          This removes their profile and team membership. They will lose access immediately. They can rejoin by signing in again.
-        </p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <Btn variant="ghost" onClick={() => setDeleteUser(null)}>Cancel</Btn>
-          <Btn onClick={handleDeleteUser} disabled={deleting} style={{ background: "var(--red)", color: "white" }}>
-            {deleting ? "Removing..." : "Remove member"}
-          </Btn>
-        </div>
-      </Modal>
-
-      {/* Delete team confirm */}
-      <Modal open={!!deleteTeam} onClose={() => setDeleteTeam(null)} title="Delete team" width={420}>
-        <p style={{ fontSize: 13, color: "var(--text-second)", marginBottom: 8 }}>
-          Are you sure you want to delete the team <strong>{deleteTeam?.name}</strong>?
-        </p>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 20 }}>
-          Members will not be deleted — they will simply have no team assigned.
-        </p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <Btn variant="ghost" onClick={() => setDeleteTeam(null)}>Cancel</Btn>
-          <Btn onClick={handleDeleteTeam} disabled={deleting} style={{ background: "var(--red)", color: "white" }}>
-            {deleting ? "Deleting..." : "Delete team"}
-          </Btn>
-        </div>
       </Modal>
     </div>
   );
