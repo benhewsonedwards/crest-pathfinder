@@ -463,7 +463,7 @@ function GanttChart({ stageTasks, onUpdateTask, canEdit }) {
 const CALL_KEYWORDS = ["call", "session", "meeting", "kickoff", "intro", "discovery", "review", "demo", "uat", "handover", "training", "qbr"];
 function isCallTask(title) { return CALL_KEYWORDS.some(k => title?.toLowerCase().includes(k)); }
 
-function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
+function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users }) {
   return (
     <div style={{
       display: "grid", gridTemplateColumns: "20px 1fr 130px 100px 100px 56px 28px 28px 28px",
@@ -485,7 +485,7 @@ function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
       </div>
       {/* Owner — stage-aware grouped dropdown */}
       {(() => {
-        const { defaultPeople, grouped } = taskAssigneesForStage(task.stageKey);
+        const { defaultPeople, grouped } = taskAssigneesForStage(stageKey);
         const currentVal = task.ownerEmail || task.ownerUid || "";
         // Check if current value is in "other" people (need Show all to be visible)
         const inDefault = defaultPeople.find(p => p.email === currentVal);
@@ -1169,6 +1169,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
                         </div>
                         {tasks.map((task, i) => (
                           <TaskRow key={task.id || i} task={task}
+                            stageKey={activeStage}
                             onUpdate={updates => canEdit && updateTask(activeStage, i, updates)}
                             onDelete={() => canEdit && deleteTask(activeStage, i)}
                             stageColour={stage?.colour} users={users}

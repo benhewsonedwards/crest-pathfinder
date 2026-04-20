@@ -322,7 +322,7 @@ function PrepBullet({ children }) {
 }
 
 // ─── Inline task editor ────────────────────────────────────────────────────────
-function TaskEditPanel({ task, engagement, users, onSave, onClose }) {
+function TaskEditPanel({ task, stageKey, engagement, users, onSave, onClose }) {
   const [form, setForm] = useState({
     title:      task.title || "",
     startDate:  task.startDate || "",
@@ -405,7 +405,7 @@ function TaskEditPanel({ task, engagement, users, onSave, onClose }) {
 
       <FieldGroup label="Assigned to">
         {(() => {
-          const { defaultPeople, grouped } = taskAssigneesForStage(task.stageKey);
+          const { defaultPeople, grouped } = taskAssigneesForStage(stageKey || task.stageKey);
           return (
             <select
               value={form.ownerEmail || form.ownerUid || ""}
@@ -1103,6 +1103,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
         {editingItem && (
           <TaskEditPanel
             task={editingItem.task}
+            stageKey={editingItem.stageKey}
             engagement={editingItem.engagement}
             users={users}
             onSave={async (updates) => {
