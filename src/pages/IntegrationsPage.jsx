@@ -35,9 +35,21 @@ function StatusDot({ statusKey }) {
 }
 
 // ─── Single integration card row ─────────────────────────────────────────────
-function IntegrationRow({ integration, onSelectCustomer, isLast }) {
+function IntegrationRow({ integration, engagement, onSelectCustomer, onSelectEngagement, isLast }) {
   const [expanded, setExpanded] = useState(false);
   const cc = catColour(integration.category);
+
+  // Collect all task files from the linked engagement (solution design, handover docs, etc.)
+  const taskDocs = [];
+  if (engagement?.stageTasks) {
+    Object.entries(engagement.stageTasks).forEach(([stageKey, tasks]) => {
+      (tasks || []).forEach(t => {
+        (t.files || []).forEach(f => {
+          taskDocs.push({ ...f, taskTitle: t.title, stageKey });
+        });
+      });
+    });
+  }
 
   return (
     <div style={{ borderBottom: isLast ? "none" : "1px solid var(--border)" }}>
@@ -100,12 +112,39 @@ function IntegrationRow({ integration, onSelectCustomer, isLast }) {
           background: "var(--surface2)", border: "1px solid var(--border)",
           borderRadius: "var(--radius)", padding: "14px 16px",
         }}>
+          {/* Engagement link */}
+          {engagement && (
+            <div style={{ marginBottom: 12, paddingBottom: 12, borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 3 }}>Linked engagement</p>
+                <p style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)" }}>
+                  {engagement.customer || engagement.csId || "Unnamed engagement"}
+                  {engagement.csId && engagement.customer && <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>{engagement.csId}</span>}
+                </p>
+              </div>
+              {onSelectEngagement && (
+                <button
+                  onClick={e => { e.stopPropagation(); onSelectEngagement(engagement); }}
+                  style={{
+                    fontSize: 12, fontWeight: 600, padding: "5px 12px",
+                    borderRadius: "var(--radius-sm)", border: "1px solid var(--purple)",
+                    background: "var(--purple-light)", color: "var(--purple)",
+                    cursor: "pointer", fontFamily: "inherit",
+                  }}
+                >
+                  Open engagement →
+                </button>
+              )}
+            </div>
+          )}
+
           {integration.problemStatement && (
             <div style={{ marginBottom: 12 }}>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 5 }}>Problem statement</p>
               <p style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 1.6 }}>{integration.problemStatement}</p>
             </div>
           )}
+
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
             {[
               ["Category", integration.category],
@@ -121,22 +160,49 @@ function IntegrationRow({ integration, onSelectCustomer, isLast }) {
               </div>
             ))}
           </div>
+
           {integration.businessImpactExplanation && (
             <div style={{ marginTop: 10 }}>
               <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 4 }}>Impact detail</p>
               <p style={{ fontSize: 12, color: "var(--text-second)", lineHeight: 1.5 }}>{integration.businessImpactExplanation}</p>
             </div>
           )}
-          <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {(integration.tickets || []).filter(t => t.jiraKey).map((t, i) => (
-              <a key={i} href={`https://safetyculture.atlassian.net/browse/${t.jiraKey}`}
-                target="_blank" rel="noreferrer"
-                style={{ fontSize: 11, color: "var(--purple)", fontWeight: 600, padding: "2px 8px", background: "var(--purple-light)", borderRadius: 999, textDecoration: "none" }}
-                onClick={e => e.stopPropagation()}>
-                {t.jiraKey} →
-              </a>
-            ))}
-          </div>
+
+          {/* Jira tickets */}
+          {(integration.tickets || []).filter(t => t.jiraKey).length > 0 && (
+            <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {(integration.tickets || []).filter(t => t.jiraKey).map((t, i) => (
+                <a key={i} href={`https://safetyculture.atlassian.net/browse/${t.jiraKey}`}
+                  target="_blank" rel="noreferrer"
+                  style={{ fontSize: 11, color: "var(--purple)", fontWeight: 600, padding: "2px 8px", background: "var(--purple-light)", borderRadius: 999, textDecoration: "none" }}
+                  onClick={e => e.stopPropagation()}>
+                  {t.jiraKey} →
+                </a>
+              ))}
+            </div>
+          )}
+
+          {/* Task documents from the linked engagement */}
+          {taskDocs.length > 0 && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 8 }}>
+                Documents ({taskDocs.length})
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {taskDocs.map((f, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                    <span style={{ fontSize: 14 }}>📎</span>
+                    <a href={f.url} target="_blank" rel="noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      style={{ color: "var(--purple)", fontWeight: 500, textDecoration: "none" }}>
+                      {f.name}
+                    </a>
+                    <span style={{ color: "var(--text-muted)", fontSize: 11 }}>— {f.taskTitle}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -144,7 +210,7 @@ function IntegrationRow({ integration, onSelectCustomer, isLast }) {
 }
 
 // ─── Category group card ──────────────────────────────────────────────────────
-function CategoryGroup({ category, integrations, onSelectCustomer }) {
+function CategoryGroup({ category, integrations, engagements, onSelectCustomer, onSelectEngagement }) {
   const [open, setOpen] = useState(true);
   const cc = catColour(category);
   const liveCount = integrations.filter(i => i.status === "live" || i.status === "live-attention").length;
@@ -196,7 +262,12 @@ function CategoryGroup({ category, integrations, onSelectCustomer }) {
               <IntegrationRow
                 key={integration.id}
                 integration={integration}
+                engagement={engagements.find(e =>
+                  e.id === integration.engagementId ||
+                  (integration.customerId && e.customerId === integration.customerId)
+                )}
                 onSelectCustomer={onSelectCustomer}
+                onSelectEngagement={onSelectEngagement}
                 isLast={i === arr.length - 1}
               />
             ))}
@@ -207,17 +278,25 @@ function CategoryGroup({ category, integrations, onSelectCustomer }) {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-export default function IntegrationsPage({ onSelectCustomer }) {
+export default function IntegrationsPage({ onSelectCustomer, onSelectEngagement }) {
   const [integrations, setIntegrations] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [search, setSearch]           = useState("");
-  const [statusFilter, setStatus]     = useState("");
+  const [engagements, setEngagements]   = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [search, setSearch]             = useState("");
+  const [statusFilter, setStatus]       = useState("");
 
   useEffect(() => {
-    return onSnapshot(collection(db, "integrations"), snap => {
+    let intDone = false, engDone = false;
+    const checkDone = () => { if (intDone && engDone) setLoading(false); };
+    const unsub1 = onSnapshot(collection(db, "integrations"), snap => {
       setIntegrations(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      intDone = true; checkDone();
     });
+    const unsub2 = onSnapshot(collection(db, "engagements"), snap => {
+      setEngagements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      engDone = true; checkDone();
+    });
+    return () => { unsub1(); unsub2(); };
   }, []);
 
   // Filter
@@ -336,7 +415,9 @@ export default function IntegrationsPage({ onSelectCustomer }) {
             key={cat}
             category={cat}
             integrations={grouped[cat]}
+            engagements={engagements}
             onSelectCustomer={onSelectCustomer}
+            onSelectEngagement={onSelectEngagement}
           />
         ))
       )}

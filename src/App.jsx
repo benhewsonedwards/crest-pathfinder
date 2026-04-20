@@ -176,6 +176,7 @@ function AppShell() {
               const customer = customers.find(cu => cu.id === c.customerId);
               if (customer) handleSelectCustomer(customer);
             }}
+            onSelectEngagement={handleSelectEngagement}
           />
         ) : page === "issues" ? (
           <IssuesPage onSelectEngagement={handleSelectEngagement} />

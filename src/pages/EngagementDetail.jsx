@@ -464,6 +464,45 @@ const CALL_KEYWORDS = ["call", "session", "meeting", "kickoff", "intro", "discov
 function isCallTask(title) { return CALL_KEYWORDS.some(k => title?.toLowerCase().includes(k)); }
 
 function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users }) {
+  const [showPanel, setShowPanel] = React.useState(false);
+  const [note, setNote]           = React.useState("");
+  const [saving, setSaving]       = React.useState(false);
+  const [uploading, setUploading] = React.useState(false);
+  const fileRef                   = React.useRef();
+
+  const isCustomerTask = task.owner === "customer" || task.ownerRole === "customer";
+  const internalNotes  = task.notes || [];
+  const internalFiles  = task.files || [];
+  const customerNotes  = task.customerNotes || [];
+  const customerFiles  = task.customerFiles || [];
+  const totalInternal  = internalNotes.length + internalFiles.length;
+  const totalCustomer  = customerNotes.length + customerFiles.length;
+
+  async function submitNote() {
+    if (!note.trim()) return;
+    setSaving(true);
+    const entry = { text: note.trim(), at: new Date().toISOString() };
+    await onUpdate({ notes: [...internalNotes, entry] });
+    setNote(""); setSaving(false);
+  }
+
+  async function handleFileUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { storage } = await import("../lib/firebase");
+      const { ref: sRef, uploadBytes, getDownloadURL } = await import("firebase/storage");
+      if (!storage) throw new Error("No storage");
+      const path = `task-uploads/${stageKey}/${Date.now()}-${file.name}`;
+      const r = sRef(storage, path);
+      await uploadBytes(r, file);
+      const url = await getDownloadURL(r);
+      await onUpdate({ files: [...internalFiles, { name: file.name, url, uploadedAt: new Date().toISOString() }] });
+    } catch (err) { console.error("Upload failed:", err); }
+    setUploading(false); e.target.value = "";
+  }
+
   return (
     <>
     <div style={{
@@ -475,66 +514,60 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
       <input type="checkbox" checked={task.done} onChange={e => onUpdate({ done: e.target.checked })}
         style={{ accentColor: sc, cursor: "pointer", width: 14, height: 14 }}/>
       <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-        {task.locked && (
-          <span title="Date locked — won't move with ripple" style={{ fontSize: 11, flexShrink: 0 }}>🔒</span>
-        )}
+        {task.locked && <span title="Date locked" style={{ fontSize: 11, flexShrink: 0 }}>🔒</span>}
         <input value={task.title} onChange={e => onUpdate({ title: e.target.value })}
           style={{ fontSize: 12, padding: "4px 8px", border: "1px solid transparent", borderRadius: 6, background: "transparent", fontFamily: "inherit", width: "100%", outline: "none", minWidth: 0 }}
           onFocus={e => e.target.style.borderColor = "var(--border)"}
           onBlur={e => e.target.style.borderColor = "transparent"}
         />
-        {/* Customer activity badge — inline in title cell so it never adds a grid column */}
-        {(() => {
-          const noteCount = (task.customerNotes || []).length;
-          const fileCount = (task.customerFiles || []).length;
-          const total = noteCount + fileCount;
-          if ((task.owner !== "customer" && task.ownerRole !== "customer") || total === 0) return null;
-          return (
-            <button
-              onClick={() => onUpdate({ _showCustomerActivity: !task._showCustomerActivity })}
-              title={`${noteCount} note${noteCount !== 1 ? "s" : ""}, ${fileCount} file${fileCount !== 1 ? "s" : ""} from customer`}
-              style={{
-                flexShrink: 0,
-                background: "rgba(101,89,255,0.12)", border: "1px solid rgba(101,89,255,0.3)",
-                borderRadius: 6, cursor: "pointer", fontSize: 10, fontWeight: 700,
-                padding: "2px 6px", color: "var(--purple)", display: "flex", alignItems: "center", gap: 3,
-              }}
-            >
-              💬 {total}
-            </button>
-          );
-        })()}
+        {/* Notes/files toggle badge — always visible, shows count when content exists */}
+        <button
+          onClick={() => setShowPanel(p => !p)}
+          title="Notes & files"
+          style={{
+            flexShrink: 0, background: showPanel ? "var(--surface)" : (totalInternal > 0 ? "var(--surface2)" : "transparent"),
+            border: `1px solid ${totalInternal > 0 ? "var(--border)" : "transparent"}`,
+            borderRadius: 6, cursor: "pointer", fontSize: 10, fontWeight: 700,
+            padding: "2px 6px", color: totalInternal > 0 ? "var(--text-second)" : "var(--text-muted)",
+            display: "flex", alignItems: "center", gap: 3, transition: "all 0.1s",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-second)"; }}
+          onMouseLeave={e => { if (!totalInternal) { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.color = "var(--text-muted)"; }}}
+        >
+          {totalInternal > 0 ? `💬 ${totalInternal}` : "💬"}
+        </button>
+        {/* Customer activity badge */}
+        {isCustomerTask && totalCustomer > 0 && (
+          <button
+            onClick={() => onUpdate({ _showCustomerActivity: !task._showCustomerActivity })}
+            title={`${totalCustomer} from customer`}
+            style={{ flexShrink: 0, background: "rgba(101,89,255,0.12)", border: "1px solid rgba(101,89,255,0.3)", borderRadius: 6, cursor: "pointer", fontSize: 10, fontWeight: 700, padding: "2px 6px", color: "var(--purple)", display: "flex", alignItems: "center", gap: 3 }}
+          >
+            👤 {totalCustomer}
+          </button>
+        )}
       </div>
-      {/* Owner — stage-aware grouped dropdown */}
+      {/* Owner dropdown */}
       {(() => {
         const { defaultPeople, grouped } = taskAssigneesForStage(stageKey);
-        const currentVal = (task.owner === "customer" || task.ownerRole === "customer") ? "customer" : (task.ownerEmail || task.ownerUid || "");
+        const currentVal = isCustomerTask ? "customer" : (task.ownerEmail || task.ownerUid || "");
         return (
-          <Select
-            value={currentVal}
-            onChange={e => {
-              const val = e.target.value;
-              if (val === "customer") onUpdate({ owner: "customer", ownerRole: "customer", ownerEmail: "", ownerUid: "" });
-              else if (val.includes("@")) onUpdate({ ownerEmail: val, ownerUid: "", owner: "", ownerRole: "" });
-              else onUpdate({ ownerUid: val, ownerEmail: "", owner: "", ownerRole: "" });
-            }}
-            style={{ fontSize: 11, padding: "4px 8px" }}
-          >
+          <Select value={currentVal} onChange={e => {
+            const val = e.target.value;
+            if (val === "customer") onUpdate({ owner: "customer", ownerRole: "customer", ownerEmail: "", ownerUid: "" });
+            else if (val.includes("@")) onUpdate({ ownerEmail: val, ownerUid: "", owner: "", ownerRole: "" });
+            else onUpdate({ ownerUid: val, ownerEmail: "", owner: "", ownerRole: "" });
+          }} style={{ fontSize: 11, padding: "4px 8px" }}>
             <option value="">Unassigned</option>
             <option value="customer">👤 Customer</option>
-            {/* Stage defaults */}
             <optgroup label="Typically responsible">
-              {defaultPeople.map(p => (
-                <option key={p.email} value={p.email}>{p.name}</option>
-              ))}
+              {defaultPeople.map(p => <option key={p.email} value={p.email}>{p.name}</option>)}
             </optgroup>
-            {/* All others grouped by team */}
             {Object.entries(grouped).map(([team, people]) => (
               <optgroup key={team} label={team}>
                 {people.map(p => <option key={p.email} value={p.email}>{p.name}</option>)}
               </optgroup>
             ))}
-            {/* Signed-in Firebase users not in directory */}
             {users.filter(u => !PEOPLE.find(p => p.email === u.email)).map(u => (
               <option key={u.uid} value={u.uid}>{u.displayName}</option>
             ))}
@@ -548,20 +581,8 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
       <Pill color={task.done ? "green" : task.required ? "purple" : "grey"} style={{ fontSize: 10 }}>
         {task.done ? "Done" : task.required ? "Req" : "Opt"}
       </Pill>
-      {/* Calendar placeholder — only shows on call-type tasks */}
-      <button
-        disabled
-        title="Schedule in Google Calendar — coming soon (requires Google OAuth)"
-        style={{
-          background: "none", border: "none", cursor: "not-allowed",
-          fontSize: 13, padding: 2, borderRadius: 4, opacity: isCallTask(task.title) ? 0.5 : 0.15,
-          color: "var(--text-muted)",
-        }}
-      >📅</button>
-      {/* Lock / unlock button */}
-      <button
-        onClick={() => onUpdate({ locked: !task.locked })}
-        title={task.locked ? "Unlock — allow ripple to move this task" : "Lock — fix this date, ripple won't move it"}
+      <button disabled title="Google Calendar — coming soon" style={{ background: "none", border: "none", cursor: "not-allowed", fontSize: 13, padding: 2, borderRadius: 4, opacity: isCallTask(task.title) ? 0.5 : 0.15, color: "var(--text-muted)" }}>📅</button>
+      <button onClick={() => onUpdate({ locked: !task.locked })} title={task.locked ? "Unlock" : "Lock dates"}
         style={{ background: task.locked ? "var(--purple-light)" : "none", border: "none", cursor: "pointer", fontSize: 13, padding: 2, borderRadius: 4, color: task.locked ? "var(--purple)" : "var(--text-muted)" }}
         onMouseEnter={e => { if (!task.locked) e.currentTarget.style.color = "var(--purple)"; }}
         onMouseLeave={e => { if (!task.locked) e.currentTarget.style.color = "var(--text-muted)"; }}
@@ -571,34 +592,62 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
         onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
       >✕</button>
     </div>
-    {/* Customer notes + files — shown when badge is clicked */}
-    {(task.owner === "customer" || task.ownerRole === "customer") && task._showCustomerActivity && (
-      <div style={{
-        margin: "0 16px 10px", padding: "12px 14px",
-        background: "rgba(101,89,255,0.06)", border: "1px solid rgba(101,89,255,0.15)",
-        borderRadius: 8,
-      }}>
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--purple)", marginBottom: 8 }}>
-          Customer activity
-        </p>
-        {(task.customerNotes || []).length === 0 && (task.customerFiles || []).length === 0 && (
-          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No notes or files yet.</p>
-        )}
-        {(task.customerNotes || []).map((n, i) => (
-          <div key={i} style={{ fontSize: 12, color: "var(--text-second)", background: "var(--surface2)", borderLeft: "3px solid var(--purple)", padding: "6px 10px", borderRadius: "0 6px 6px 0", marginBottom: 6 }}>
+
+    {/* Internal notes + files panel */}
+    {showPanel && (
+      <div style={{ margin: "0 16px 10px", padding: "12px 14px", background: "var(--surface2)", border: "1px solid var(--border)", borderRadius: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", margin: 0 }}>Notes & files</p>
+          <button onClick={() => setShowPanel(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12 }}>✕</button>
+        </div>
+        {internalNotes.map((n, i) => (
+          <div key={i} style={{ fontSize: 12, color: "var(--text-second)", background: "var(--surface)", borderLeft: "3px solid var(--border)", padding: "6px 10px", borderRadius: "0 6px 6px 0", marginBottom: 6 }}>
             <p style={{ margin: 0 }}>{n.text}</p>
-            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "3px 0 0" }}>
-              {new Date(n.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
-            </p>
+            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "3px 0 0" }}>{new Date(n.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
           </div>
         ))}
-        {(task.customerFiles || []).map((f, i) => (
+        {internalFiles.map((f, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 5 }}>
+            <span>📎</span>
+            <a href={f.url} target="_blank" rel="noreferrer" style={{ color: "var(--purple)" }}>{f.name}</a>
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{new Date(f.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+          </div>
+        ))}
+        {internalNotes.length === 0 && internalFiles.length === 0 && (
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>No notes or files yet.</p>
+        )}
+        <textarea value={note} onChange={e => setNote(e.target.value)} placeholder="Add a note..." rows={2}
+          style={{ width: "100%", padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontFamily: "inherit", fontSize: 12, resize: "vertical", outline: "none", background: "var(--surface)", color: "var(--text-primary)", boxSizing: "border-box", marginTop: 8 }} />
+        <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+          <button onClick={submitNote} disabled={!note.trim() || saving}
+            style={{ fontSize: 11, padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "none", background: "var(--purple)", color: "white", cursor: "pointer", fontWeight: 600, opacity: !note.trim() ? 0.5 : 1, fontFamily: "inherit" }}>
+            {saving ? "Saving..." : "Add note"}
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+            style={{ fontSize: 11, padding: "4px 12px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", background: "transparent", color: "var(--text-second)", cursor: "pointer", fontFamily: "inherit" }}>
+            {uploading ? "Uploading..." : "📎 Attach file"}
+          </button>
+          <input ref={fileRef} type="file" style={{ display: "none" }} onChange={handleFileUpload} />
+        </div>
+      </div>
+    )}
+
+    {/* Customer notes + files */}
+    {isCustomerTask && task._showCustomerActivity && (
+      <div style={{ margin: "0 16px 10px", padding: "12px 14px", background: "rgba(101,89,255,0.06)", border: "1px solid rgba(101,89,255,0.15)", borderRadius: 8 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--purple)", marginBottom: 8 }}>Customer activity</p>
+        {customerNotes.length === 0 && customerFiles.length === 0 && <p style={{ fontSize: 12, color: "var(--text-muted)" }}>No notes or files from customer yet.</p>}
+        {customerNotes.map((n, i) => (
+          <div key={i} style={{ fontSize: 12, color: "var(--text-second)", background: "var(--surface2)", borderLeft: "3px solid var(--purple)", padding: "6px 10px", borderRadius: "0 6px 6px 0", marginBottom: 6 }}>
+            <p style={{ margin: 0 }}>{n.text}</p>
+            <p style={{ fontSize: 10, color: "var(--text-muted)", margin: "3px 0 0" }}>{new Date(n.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+          </div>
+        ))}
+        {customerFiles.map((f, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, marginBottom: 4 }}>
             <span>📎</span>
             <a href={f.url} target="_blank" rel="noreferrer" style={{ color: "var(--purple)" }}>{f.name}</a>
-            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
-              {new Date(f.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
-            </span>
+            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{new Date(f.uploadedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
           </div>
         ))}
       </div>
@@ -606,6 +655,7 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
     </>
   );
 }
+
 
 // ─── Activity log ─────────────────────────────────────────────────────────────
 function ActivityLog({ engagementId }) {
