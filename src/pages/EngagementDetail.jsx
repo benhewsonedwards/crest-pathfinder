@@ -486,20 +486,20 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
       {/* Owner — stage-aware grouped dropdown */}
       {(() => {
         const { defaultPeople, grouped } = taskAssigneesForStage(stageKey);
-        const currentVal = task.ownerEmail || task.ownerUid || "";
-        // Check if current value is in "other" people (need Show all to be visible)
-        const inDefault = defaultPeople.find(p => p.email === currentVal);
+        const currentVal = (task.owner === "customer" || task.ownerRole === "customer") ? "customer" : (task.ownerEmail || task.ownerUid || "");
         return (
           <Select
             value={currentVal}
             onChange={e => {
               const val = e.target.value;
-              if (val.includes("@")) onUpdate({ ownerEmail: val, ownerUid: "" });
-              else onUpdate({ ownerUid: val, ownerEmail: "" });
+              if (val === "customer") onUpdate({ owner: "customer", ownerRole: "customer", ownerEmail: "", ownerUid: "" });
+              else if (val.includes("@")) onUpdate({ ownerEmail: val, ownerUid: "", owner: "", ownerRole: "" });
+              else onUpdate({ ownerUid: val, ownerEmail: "", owner: "", ownerRole: "" });
             }}
             style={{ fontSize: 11, padding: "4px 8px" }}
           >
             <option value="">Unassigned</option>
+            <option value="customer">👤 Customer</option>
             {/* Stage defaults */}
             <optgroup label="Typically responsible">
               {defaultPeople.map(p => (

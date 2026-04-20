@@ -7,7 +7,8 @@ const NAV_ITEMS = [
   { id: "pipeline",    icon: "⚡", label: "Pipeline"    },
   { id: "engagements", icon: "🗂️",  label: "Engagements" },
   { id: "issues",      icon: "⚠️",  label: "Issues"      },
-  { id: "team",        icon: "👥", label: "Team"        },
+  { id: "team",        icon: "👥", label: "Team"         },
+  { id: "sharelinks",  icon: "🔗", label: "Share Links"  },
   { id: "settings",    icon: "⚙️",  label: "Settings"    },
 ];
 

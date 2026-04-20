@@ -408,15 +408,17 @@ function TaskEditPanel({ task, stageKey, engagement, users, onSave, onClose }) {
           const { defaultPeople, grouped } = taskAssigneesForStage(stageKey || task.stageKey);
           return (
             <select
-              value={form.ownerEmail || form.ownerUid || ""}
+              value={(form.owner === "customer" || form.ownerRole === "customer") ? "customer" : (form.ownerEmail || form.ownerUid || "")}
               onChange={e => {
                 const val = e.target.value;
-                if (val.includes("@")) { upd("ownerEmail", val); upd("ownerUid", ""); }
-                else { upd("ownerUid", val); upd("ownerEmail", ""); }
+                if (val === "customer") { upd("owner", "customer"); upd("ownerRole", "customer"); upd("ownerEmail", ""); upd("ownerUid", ""); }
+                else if (val.includes("@")) { upd("ownerEmail", val); upd("ownerUid", ""); upd("owner", ""); upd("ownerRole", ""); }
+                else { upd("ownerUid", val); upd("ownerEmail", ""); upd("owner", ""); upd("ownerRole", ""); }
               }}
               style={{ width: "100%", padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontFamily: "inherit", fontSize: 13, background: "var(--surface)", color: "var(--text-primary)", outline: "none" }}
             >
               <option value="">— Unassigned —</option>
+              <option value="customer">👤 Customer</option>
               <optgroup label="Typically responsible">
                 {defaultPeople.map(p => (
                   <option key={p.email} value={p.email}>{p.name}</option>

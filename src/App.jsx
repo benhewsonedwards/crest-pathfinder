@@ -12,7 +12,7 @@ import CustomersPage from "./pages/CustomersPage";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import MyDashboard from "./pages/MyDashboard";
 import SharePage from "./pages/SharePage";
-import Sidebar from "./components/Sidebar";
+import ShareLinksPage from "./pages/ShareLinksPage";
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
 
@@ -171,6 +171,8 @@ function AppShell() {
           <IssuesPage onSelectEngagement={handleSelectEngagement} />
         ) : page === "team" ? (
           <TeamPage />
+        ) : page === "sharelinks" ? (
+          <ShareLinksPage />
         ) : page === "settings" ? (
           <div style={{ padding: "24px 28px 48px" }}>
             <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 8 }}>Settings</h1>
@@ -228,8 +230,13 @@ function AppShell() {
 }
 
 export default function App() {
-  // Check for public share route: #/share/:customerId
   const hash = window.location.hash;
+  // Token-based share route: #/s/:token
+  const tokenMatch = hash.match(/^#\/s\/([a-z0-9]+)$/i);
+  if (tokenMatch) {
+    return <SharePage token={tokenMatch[1]} />;
+  }
+  // Legacy direct customerId route (backwards compat): #/share/:customerId
   const shareMatch = hash.match(/^#\/share\/(.+)$/);
   if (shareMatch) {
     return <SharePage customerId={shareMatch[1]} />;
