@@ -14,7 +14,7 @@ import MyDashboard from "./pages/MyDashboard";
 import SharePage from "./pages/SharePage";
 import ShareLinksPage from "./pages/ShareLinksPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
-import Sidebar from "./components/Sidebar";
+import Sidebar from "./components/Sidebar"; // required
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
 
