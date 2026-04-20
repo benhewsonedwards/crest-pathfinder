@@ -13,6 +13,9 @@ import {
   useSortable, SortableHeader
 } from "../components/UI";
 
+import PersonSelect from "../components/PersonSelect";
+import { personByEmail } from "../lib/people";
+
 const INDUSTRIES = [
   "Manufacturing", "Retail", "Hospitality", "Construction", "Transportation",
   "Logistics", "Healthcare", "Financial Services", "Real Estate", "Energy",
@@ -36,7 +39,7 @@ const BLANK_CUSTOMER = {
   name: "", sfAccountId: "", region: "EMEA", segment: "Enterprise",
   subscription: "Enterprise", arr: "", currency: "GBP £",
   industry: "", website: "", employees: "",
-  csmName: "", comName: "", aeName: "",
+  csmEmail: "", comEmail: "", aeEmail: "",
   scOrgRoleId: "", periscopeLink: "", notes: "",
 };
 
@@ -89,9 +92,10 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
       industry:     customer.industry     || "",
       website:      customer.website      || "",
       employees:    customer.employees    || "",
-      csmName:      customer.csmName      || "",
-      comName:      customer.comName      || "",
-      aeName:       customer.aeName       || "",
+      // Use email if stored, otherwise try to look up by legacy name field
+      csmEmail:     customer.csmEmail || (customer.csmName ? (personByEmail(customer.csmName) || { email: "" }).email : "") || "",
+      comEmail:     customer.comEmail || (customer.comName ? (personByEmail(customer.comName) || { email: "" }).email : "") || "",
+      aeEmail:      customer.aeEmail  || (customer.aeName  ? (personByEmail(customer.aeName)  || { email: "" }).email : "") || "",
       scOrgRoleId:  customer.scOrgRoleId  || "",
       periscopeLink:customer.periscopeLink|| "",
       notes:        customer.notes        || "",
@@ -297,7 +301,7 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
                       {brokenCount > 0 && <Pill color="red" style={{ fontSize: 10 }}>⚠ {brokenCount} broken</Pill>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                      {customer.csmName && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>CSM: {customer.csmName}</span>}
+                      {customer.csmEmail && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>CSM: {personByEmail(customer.csmEmail)?.name || customer.csmEmail}</span>}
                       {customer.arr && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>ARR: £{Number(customer.arr).toLocaleString()}</span>}
                       {customer.industry && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{customer.industry}</span>}
                     </div>
@@ -377,9 +381,15 @@ export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
           <FieldGroup label="Industry"><Select value={form.industry} onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}><option value="">— select —</option>{INDUSTRIES.map(i => <option key={i}>{i}</option>)}</Select></FieldGroup>
           <FieldGroup label="Website"><Input value={form.website} onChange={e => setForm(f => ({ ...f, website: e.target.value }))} placeholder="www.example.com" /></FieldGroup>
           <FieldGroup label="Employees"><Input value={form.employees} onChange={e => setForm(f => ({ ...f, employees: e.target.value }))} placeholder="e.g. 5000" /></FieldGroup>
-          <FieldGroup label="CSM Name"><Input value={form.csmName} onChange={e => setForm(f => ({ ...f, csmName: e.target.value }))} placeholder="e.g. Hanaa Ashraf" /></FieldGroup>
-          <FieldGroup label="COM Name"><Input value={form.comName} onChange={e => setForm(f => ({ ...f, comName: e.target.value }))} placeholder="e.g. Alice Kirkup" /></FieldGroup>
-          <FieldGroup label="AE Name"><Input value={form.aeName} onChange={e => setForm(f => ({ ...f, aeName: e.target.value }))} /></FieldGroup>
+          <FieldGroup label="CSM">
+            <PersonSelect field="csm" value={form.csmEmail} onChange={v => setForm(f => ({ ...f, csmEmail: v }))} placeholder="Select CSM..." />
+          </FieldGroup>
+          <FieldGroup label="COM">
+            <PersonSelect field="com" value={form.comEmail} onChange={v => setForm(f => ({ ...f, comEmail: v }))} placeholder="Select COM..." />
+          </FieldGroup>
+          <FieldGroup label="AE">
+            <PersonSelect field="ae" value={form.aeEmail} onChange={v => setForm(f => ({ ...f, aeEmail: v }))} placeholder="Select AE..." />
+          </FieldGroup>
           <FieldGroup label="SC Org Role ID"><Input value={form.scOrgRoleId} onChange={e => setForm(f => ({ ...f, scOrgRoleId: e.target.value }))} placeholder="role_..." /></FieldGroup>
           <div style={{ gridColumn: "1 / -1" }}>
             <FieldGroup label="Periscope Link"><Input value={form.periscopeLink} onChange={e => setForm(f => ({ ...f, periscopeLink: e.target.value }))} placeholder="https://tools.safetyculture.com/..." /></FieldGroup>

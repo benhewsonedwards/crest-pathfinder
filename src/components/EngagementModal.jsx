@@ -4,6 +4,8 @@ import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { STAGES, REGIONS, SEGMENTS, SUBSCRIPTIONS, OPP_TYPES, TSHIRT_SIZES, CURRENCIES, PLAN_TYPES, RAG_STATUSES, SC_MODULES, INTEGRATIONS, ENHANCEMENT_STAGE_KEYS, buildDefaultTasks, buildAllStageTasks, todayIso } from "../lib/constants";
 import { Modal, Btn, Input, Select, Textarea, FieldGroup, Label, Pill } from "../components/UI";
+import PersonSelect from "../components/PersonSelect";
+import { personByEmail } from "../lib/people";
 
 const BLANK = {
   customer: "", customerId: "", csId: "", sfOppId: "", sfOppLink: "", jiraKey: "", jiraLink: "",
@@ -11,14 +13,14 @@ const BLANK = {
   oppType: "New Business", tshirt: "Standard", currency: "GBP £",
   arr: "", targetArr: "", closeDate: "", planType: "Onboarding",
   ragStatus: "green", currentStage: "opportunity",
-  aeUid: "", cseUid: "", csmUid: "", taUid: "",
+  aeEmail: "", cseEmail: "", csmEmail: "", taEmail: "",
   modules: [], integrations: [], notes: "",
 };
 
 const BLANK_CUST = {
   name: "", sfAccountId: "", region: "EMEA", segment: "Enterprise",
   subscription: "Enterprise", arr: "", currency: "GBP £",
-  industry: "", website: "", csmName: "", comName: "", aeName: "",
+  industry: "", website: "", csmEmail: "", comEmail: "", aeEmail: "",
 };
 
 // ─── Inline customer picker ───────────────────────────────────────────────────
@@ -200,8 +202,8 @@ function CustomerPicker({ customers, value, customerId, onChange, onCreateCustom
                     {SEGMENTS.map(s => <option key={s}>{s}</option>)}
                   </Select>
                 </FieldGroup>
-                <FieldGroup label="CSM name">
-                  <Input value={newCust.csmName} onChange={e => setNewCust(f => ({ ...f, csmName: e.target.value }))} placeholder="e.g. Hanaa Ashraf" />
+                <FieldGroup label="CSM">
+                  <PersonSelect field="csm" value={newCust.csmEmail} onChange={v => setNewCust(f => ({ ...f, csmEmail: v }))} placeholder="Select CSM..." />
                 </FieldGroup>
                 <FieldGroup label="ARR">
                   <Input value={newCust.arr} type="number" onChange={e => setNewCust(f => ({ ...f, arr: e.target.value }))} placeholder="e.g. 45000" />
@@ -414,14 +416,18 @@ export default function EngagementModal({ open, onClose, initial, users, custome
 
       {tab === "team" && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {[["Account Executive (AE)", "aeUid"], ["CSE Owner", "cseUid"], ["CSM Owner", "csmUid"], ["Technical Architect (TA)", "taUid"]].map(([label, field]) => (
-            <FieldGroup key={field} label={label}>
-              <Select value={form[field]} onChange={e => upd(field, e.target.value)}>
-                <option value="">— unassigned —</option>
-                {users.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
-              </Select>
-            </FieldGroup>
-          ))}
+          <FieldGroup label="Account Executive (AE)">
+            <PersonSelect field="ae" value={form.aeEmail} onChange={v => upd("aeEmail", v)} placeholder="Select AE..." />
+          </FieldGroup>
+          <FieldGroup label="CSE Owner">
+            <PersonSelect field="cse" value={form.cseEmail} onChange={v => upd("cseEmail", v)} placeholder="Select CSE..." />
+          </FieldGroup>
+          <FieldGroup label="CSM Owner">
+            <PersonSelect field="csm" value={form.csmEmail} onChange={v => upd("csmEmail", v)} placeholder="Select CSM..." />
+          </FieldGroup>
+          <FieldGroup label="Technical Architect (TA)">
+            <PersonSelect field="all" value={form.taEmail} onChange={v => upd("taEmail", v)} placeholder="Select TA..." />
+          </FieldGroup>
         </div>
       )}
 

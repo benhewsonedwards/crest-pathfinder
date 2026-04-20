@@ -10,8 +10,12 @@ import {
 } from "../lib/constants";
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
+import { personByEmail, PEOPLE } from "../lib/people";
 
-// ─── Coming soon placeholder (inline, no tooltip state needed at this scale) ──
+// Task assignees = CSE, COM, IM, and manager roles — the people who do the work
+const TASK_ASSIGNEES = PEOPLE.filter(p => ["cse", "com", "im", "manager"].includes(p.roleKey));
+
+// ─── Coming soon placeholder button ──────────────────────────────────────────
 function ComingSoonBtn({ icon, label, tooltip }) {
   const [tip, setTip] = React.useState(false);
   return (
@@ -472,9 +476,36 @@ function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
           onBlur={e => e.target.style.borderColor = "transparent"}
         />
       </div>
-      <Select value={task.ownerUid || ""} onChange={e => onUpdate({ ownerUid: e.target.value })} style={{ fontSize: 11, padding: "4px 8px" }}>
+      {/* Owner — merged directory + Firebase users */}
+      <Select
+        value={task.ownerEmail || task.ownerUid || ""}
+        onChange={e => {
+          const val = e.target.value;
+          // If it looks like a Firebase UID (not an email), store as ownerUid; otherwise as ownerEmail
+          if (val.includes("@")) {
+            onUpdate({ ownerEmail: val, ownerUid: "" });
+          } else {
+            onUpdate({ ownerUid: val, ownerEmail: "" });
+          }
+        }}
+        style={{ fontSize: 11, padding: "4px 8px" }}
+      >
         <option value="">Unassigned</option>
-        {users.map(u => <option key={u.uid} value={u.uid}>{u.displayName}</option>)}
+        {/* Directory people first */}
+        {[...new Set([...users.map(u => u.email), ...(import.meta.env ? [] : [])])].length === 0 && null}
+        <optgroup label="Team">
+          {TASK_ASSIGNEES.map(p => (
+            <option key={p.email} value={p.email}>{p.name}</option>
+          ))}
+        </optgroup>
+        {/* Any signed-in Firebase users not in the directory */}
+        {users.filter(u => !TASK_ASSIGNEES.find(p => p.email === u.email)).length > 0 && (
+          <optgroup label="Other">
+            {users.filter(u => !TASK_ASSIGNEES.find(p => p.email === u.email)).map(u => (
+              <option key={u.uid} value={u.uid}>{u.displayName}</option>
+            ))}
+          </optgroup>
+        )}
       </Select>
       <input type="date" value={task.startDate || ""} onChange={e => onUpdate({ startDate: e.target.value })}
         style={{ fontSize: 11, padding: "4px 8px", border: `1px solid ${task.locked ? "var(--purple)" : "var(--border)"}`, borderRadius: 6, fontFamily: "inherit", outline: "none" }}/>
@@ -980,19 +1011,28 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
             <Card style={{ marginBottom: 12 }}>
               <CardHeader><Label>Team</Label></CardHeader>
               <div style={{ padding: "12px 18px" }}>
-                {[["AE", engagement.aeUid], ["CSE", engagement.cseUid], ["CSM", engagement.csmUid], ["TA", engagement.taUid]].map(([role, uid]) => {
-                  const u = users.find(u => u.uid === uid);
-                  if (!u) return null;
+                {[["AE", engagement.aeEmail, engagement.aeUid], ["CSE", engagement.cseEmail, engagement.cseUid], ["CSM", engagement.csmEmail, engagement.csmUid], ["TA", engagement.taEmail, engagement.taUid]].map(([role, email, uid]) => {
+                  // Resolve from directory first, then fall back to Firebase users
+                  const dirPerson = email ? personByEmail(email) : null;
+                  const firebaseUser = uid ? users.find(u => u.uid === uid) : null;
+                  const person = dirPerson || (firebaseUser ? { name: firebaseUser.displayName, email: firebaseUser.email, initials: firebaseUser.displayName?.split(" ").map(n=>n[0]).join("").slice(0,2) } : null);
+                  if (!person) return null;
+                  const roleColours = { AE: "var(--amber)", CSE: "var(--purple)", CSM: "var(--green)", TA: "#7C4DFF" };
                   return (
                     <div key={role} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: "1px solid var(--border)" }}>
-                      <Avatar name={u.displayName} photoURL={u.photoURL} size={28}/>
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: (roleColours[role] || "var(--purple)") + "22", color: roleColours[role] || "var(--purple)", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {person.initials || person.name?.split(" ").map(n=>n[0]).join("").slice(0,2)}
+                      </div>
                       <div>
-                        <p style={{ fontSize: 12, fontWeight: 500 }}>{u.displayName}</p>
+                        <p style={{ fontSize: 12, fontWeight: 500 }}>{person.name}</p>
                         <p style={{ fontSize: 10, color: "var(--text-muted)" }}>{role}</p>
                       </div>
                     </div>
                   );
                 })}
+                {!engagement.aeEmail && !engagement.aeUid && !engagement.cseEmail && !engagement.cseUid && !engagement.csmEmail && !engagement.csmUid && (
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>No team assigned yet</p>
+                )}
               </div>
             </Card>
 

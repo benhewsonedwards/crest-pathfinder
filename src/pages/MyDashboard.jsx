@@ -8,6 +8,9 @@ import {
 } from "../lib/constants";
 import { Pill, Btn, Input, Textarea, Modal, Spinner, Avatar, Label, FieldGroup } from "../components/UI";
 import { generateCallPrep } from "../lib/callPrepKnowledge";
+import { PEOPLE } from "../lib/people";
+
+const TASK_ASSIGNEES = PEOPLE.filter(p => ["cse", "com", "im", "manager"].includes(p.roleKey));
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isoToDate(iso) { return iso ? new Date(iso + "T00:00:00") : null; }
@@ -321,13 +324,14 @@ function PrepBullet({ children }) {
 // ─── Inline task editor ────────────────────────────────────────────────────────
 function TaskEditPanel({ task, engagement, users, onSave, onClose }) {
   const [form, setForm] = useState({
-    title:     task.title || "",
-    startDate: task.startDate || "",
-    endDate:   task.endDate || "",
-    ownerUid:  task.ownerUid || "",
-    done:      task.done || false,
-    notes:     task.notes || "",
-    locked:    task.locked || false,
+    title:      task.title || "",
+    startDate:  task.startDate || "",
+    endDate:    task.endDate || "",
+    ownerUid:   task.ownerUid || "",
+    ownerEmail: task.ownerEmail || "",
+    done:       task.done || false,
+    notes:      task.notes || "",
+    locked:     task.locked || false,
   });
   const [saving, setSaving] = useState(false);
   const [showMeeting, setShowMeeting] = useState(false);
@@ -401,12 +405,21 @@ function TaskEditPanel({ task, engagement, users, onSave, onClose }) {
 
       <FieldGroup label="Assigned to">
         <select
-          value={form.ownerUid || ""}
-          onChange={e => upd("ownerUid", e.target.value)}
+          value={form.ownerEmail || form.ownerUid || ""}
+          onChange={e => {
+            const val = e.target.value;
+            if (val.includes("@")) { upd("ownerEmail", val); upd("ownerUid", ""); }
+            else { upd("ownerUid", val); upd("ownerEmail", ""); }
+          }}
           style={{ width: "100%", padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontFamily: "inherit", fontSize: 13, background: "var(--surface)", color: "var(--text-primary)", outline: "none" }}
         >
           <option value="">— Unassigned —</option>
-          {(users || []).map(u => (
+          <optgroup label="Team">
+            {TASK_ASSIGNEES.map(p => (
+              <option key={p.email} value={p.email}>{p.name}</option>
+            ))}
+          </optgroup>
+          {(users || []).filter(u => !TASK_ASSIGNEES.find(p => p.email === u.email)).map(u => (
             <option key={u.uid} value={u.uid}>{u.displayName}</option>
           ))}
         </select>
@@ -491,7 +504,10 @@ function TaskCard({ item, users, onEdit, onToggleDone }) {
   const { task, engagement } = item;
   const colour = stageColour(task.stageKey);
   const stageDef = STAGES.find(s => s.key === task.stageKey);
-  const owner = users?.find(u => u.uid === task.ownerUid);
+  // Resolve owner: try Firebase UID first, then email from directory
+  const ownerByUid = users?.find(u => u.uid === task.ownerUid);
+  const ownerByEmail = task.ownerEmail ? TASK_ASSIGNEES.find(p => p.email === task.ownerEmail) : null;
+  const owner = ownerByUid || (ownerByEmail ? { displayName: ownerByEmail.name, photoURL: null } : null);
   const today = todayIso();
   const isOverdue = !task.done && task.endDate && task.endDate < today;
   const isDueToday = !task.done && task.endDate === today;
@@ -751,9 +767,14 @@ export default function MyDashboard({ onSelectEngagement, users }) {
     return items;
   }, [engagements]);
 
-  // My tasks = tasks assigned to logged-in user
+  // My tasks = tasks assigned to logged-in user (by UID or email)
   const myUid = user?.uid;
+  const myEmail = user?.email;
   const today = todayIso();
+
+  function isMyTask(task) {
+    return task.ownerUid === myUid || (myEmail && task.ownerEmail === myEmail);
+  }
 
   // Managers (admin/super_admin) see all tasks; others see only their own on the calendar
   const isManager = profile?.role === "admin" || profile?.role === "super_admin";
@@ -762,8 +783,8 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   const calendarItems = useMemo(() => {
     const base = allItems.filter(i => !i.task.done || showDone);
     if (isManager) return base;
-    return base.filter(i => i.task.ownerUid === myUid);
-  }, [allItems, showDone, isManager, myUid]);
+    return base.filter(i => isMyTask(i.task));
+  }, [allItems, showDone, isManager, myUid, myEmail]);
 
   const filteredItems = useMemo(() => {
     let base = allItems;
@@ -777,7 +798,7 @@ export default function MyDashboard({ onSelectEngagement, users }) {
     }
 
     switch (listFilter) {
-      case "mine":     return base.filter(i => i.task.ownerUid === myUid);
+      case "mine":     return base.filter(i => isMyTask(i.task));
       case "overdue":  return base.filter(i => i.task.endDate && i.task.endDate < today);
       case "upcoming": return base.filter(i => i.task.startDate && i.task.startDate >= today && i.task.startDate <= workingDayAdd(today, 14));
       case "calls":    return base.filter(i => isCallTask(i.task.title));
@@ -786,10 +807,10 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   }, [allItems, listFilter, selectedDay, showDone, myUid, today]);
 
   // Stats
-  const myTasks    = allItems.filter(i => !i.task.done && i.task.ownerUid === myUid);
+  const myTasks    = allItems.filter(i => !i.task.done && isMyTask(i.task));
   const overdue    = allItems.filter(i => !i.task.done && i.task.endDate && i.task.endDate < today);
   const dueThisWeek = allItems.filter(i => !i.task.done && i.task.endDate && i.task.endDate >= today && i.task.endDate <= workingDayAdd(today, 7));
-  const callTasks  = allItems.filter(i => !i.task.done && isCallTask(i.task.title) && (listFilter === "all" || i.task.ownerUid === myUid));
+  const callTasks  = allItems.filter(i => !i.task.done && isCallTask(i.task.title) && (listFilter === "all" || isMyTask(i.task)));
 
   // Navigation
   function prevPeriod() {
