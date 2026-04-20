@@ -483,6 +483,27 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
           onFocus={e => e.target.style.borderColor = "var(--border)"}
           onBlur={e => e.target.style.borderColor = "transparent"}
         />
+        {/* Customer activity badge — inline in title cell so it never adds a grid column */}
+        {(() => {
+          const noteCount = (task.customerNotes || []).length;
+          const fileCount = (task.customerFiles || []).length;
+          const total = noteCount + fileCount;
+          if ((task.owner !== "customer" && task.ownerRole !== "customer") || total === 0) return null;
+          return (
+            <button
+              onClick={() => onUpdate({ _showCustomerActivity: !task._showCustomerActivity })}
+              title={`${noteCount} note${noteCount !== 1 ? "s" : ""}, ${fileCount} file${fileCount !== 1 ? "s" : ""} from customer`}
+              style={{
+                flexShrink: 0,
+                background: "rgba(101,89,255,0.12)", border: "1px solid rgba(101,89,255,0.3)",
+                borderRadius: 6, cursor: "pointer", fontSize: 10, fontWeight: 700,
+                padding: "2px 6px", color: "var(--purple)", display: "flex", alignItems: "center", gap: 3,
+              }}
+            >
+              💬 {total}
+            </button>
+          );
+        })()}
       </div>
       {/* Owner — stage-aware grouped dropdown */}
       {(() => {
@@ -545,26 +566,6 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
         onMouseEnter={e => { if (!task.locked) e.currentTarget.style.color = "var(--purple)"; }}
         onMouseLeave={e => { if (!task.locked) e.currentTarget.style.color = "var(--text-muted)"; }}
       >{task.locked ? "🔒" : "🔓"}</button>
-      {/* Customer activity indicator */}
-      {(() => {
-        const noteCount = (task.customerNotes || []).length;
-        const fileCount = (task.customerFiles || []).length;
-        const total = noteCount + fileCount;
-        if ((task.owner !== "customer" && task.ownerRole !== "customer") || total === 0) return null;
-        return (
-          <button
-            onClick={() => onUpdate({ _showCustomerActivity: !task._showCustomerActivity })}
-            title={`${noteCount} note${noteCount !== 1 ? "s" : ""}, ${fileCount} file${fileCount !== 1 ? "s" : ""} from customer`}
-            style={{
-              background: "rgba(101,89,255,0.12)", border: "1px solid rgba(101,89,255,0.3)",
-              borderRadius: 6, cursor: "pointer", fontSize: 10, fontWeight: 700,
-              padding: "2px 6px", color: "var(--purple)", display: "flex", alignItems: "center", gap: 3,
-            }}
-          >
-            💬 {total}
-          </button>
-        );
-      })()}
       <button onClick={onDelete} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 13, padding: 2 }}
         onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
         onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
