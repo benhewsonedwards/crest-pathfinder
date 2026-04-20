@@ -467,7 +467,7 @@ function TaskRow({ task, stageKey, onUpdate, onDelete, stageColour: sc, users })
   return (
     <>
     <div style={{
-      display: "grid", gridTemplateColumns: "20px 1fr 110px 88px 88px 52px 26px 26px 26px",
+      display: "grid", gridTemplateColumns: "20px minmax(0,1fr) 130px 100px 100px 56px 28px 28px 28px",
       gap: 8, padding: "9px 16px", borderBottom: "1px solid var(--border)",
       alignItems: "center", opacity: task.done ? 0.6 : 1, transition: "opacity 0.15s",
       background: task.locked ? "rgba(101,89,255,0.03)" : "transparent",
@@ -1218,7 +1218,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
                       </div>
                     ) : (
                       <>
-                        <div style={{ display: "grid", gridTemplateColumns: "20px 1fr 110px 88px 88px 52px 26px 26px 26px", gap: 8, padding: "7px 16px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "20px minmax(0,1fr) 130px 100px 100px 56px 28px 28px 28px", gap: 8, padding: "7px 16px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
                           {["✓", "Task", "Owner", "Start", "End", "Status", "📅", "", ""].map((h, i) => <Label key={i} title={h === "📅" ? "Schedule in Google Calendar (coming soon)" : undefined}>{h}</Label>)}
                         </div>
                         {tasks.map((task, i) => (
