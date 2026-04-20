@@ -10,10 +10,9 @@ import {
 } from "../lib/constants";
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
-import { personByEmail, PEOPLE } from "../lib/people";
+import { personByEmail, PEOPLE, taskAssigneesForStage } from "../lib/people";
 
-// Task assignees = CSE, COM, IM, and manager roles — the people who do the work
-const TASK_ASSIGNEES = PEOPLE.filter(p => ["cse", "com", "im", "manager"].includes(p.roleKey));
+// Task assignees resolved per-stage via taskAssigneesForStage()
 
 // ─── Coming soon placeholder button ──────────────────────────────────────────
 function ComingSoonBtn({ icon, label, tooltip }) {
@@ -484,37 +483,42 @@ function TaskRow({ task, onUpdate, onDelete, stageColour: sc, users }) {
           onBlur={e => e.target.style.borderColor = "transparent"}
         />
       </div>
-      {/* Owner — merged directory + Firebase users */}
-      <Select
-        value={task.ownerEmail || task.ownerUid || ""}
-        onChange={e => {
-          const val = e.target.value;
-          // If it looks like a Firebase UID (not an email), store as ownerUid; otherwise as ownerEmail
-          if (val.includes("@")) {
-            onUpdate({ ownerEmail: val, ownerUid: "" });
-          } else {
-            onUpdate({ ownerUid: val, ownerEmail: "" });
-          }
-        }}
-        style={{ fontSize: 11, padding: "4px 8px" }}
-      >
-        <option value="">Unassigned</option>
-        {/* Directory people first */}
-        {[...new Set([...users.map(u => u.email), ...(import.meta.env ? [] : [])])].length === 0 && null}
-        <optgroup label="Team">
-          {TASK_ASSIGNEES.map(p => (
-            <option key={p.email} value={p.email}>{p.name}</option>
-          ))}
-        </optgroup>
-        {/* Any signed-in Firebase users not in the directory */}
-        {users.filter(u => !TASK_ASSIGNEES.find(p => p.email === u.email)).length > 0 && (
-          <optgroup label="Other">
-            {users.filter(u => !TASK_ASSIGNEES.find(p => p.email === u.email)).map(u => (
+      {/* Owner — stage-aware grouped dropdown */}
+      {(() => {
+        const { defaultPeople, grouped } = taskAssigneesForStage(task.stageKey);
+        const currentVal = task.ownerEmail || task.ownerUid || "";
+        // Check if current value is in "other" people (need Show all to be visible)
+        const inDefault = defaultPeople.find(p => p.email === currentVal);
+        return (
+          <Select
+            value={currentVal}
+            onChange={e => {
+              const val = e.target.value;
+              if (val.includes("@")) onUpdate({ ownerEmail: val, ownerUid: "" });
+              else onUpdate({ ownerUid: val, ownerEmail: "" });
+            }}
+            style={{ fontSize: 11, padding: "4px 8px" }}
+          >
+            <option value="">Unassigned</option>
+            {/* Stage defaults */}
+            <optgroup label="Typically responsible">
+              {defaultPeople.map(p => (
+                <option key={p.email} value={p.email}>{p.name}</option>
+              ))}
+            </optgroup>
+            {/* All others grouped by team */}
+            {Object.entries(grouped).map(([team, people]) => (
+              <optgroup key={team} label={team}>
+                {people.map(p => <option key={p.email} value={p.email}>{p.name}</option>)}
+              </optgroup>
+            ))}
+            {/* Signed-in Firebase users not in directory */}
+            {users.filter(u => !PEOPLE.find(p => p.email === u.email)).map(u => (
               <option key={u.uid} value={u.uid}>{u.displayName}</option>
             ))}
-          </optgroup>
-        )}
-      </Select>
+          </Select>
+        );
+      })()}
       <input type="date" value={task.startDate || ""} onChange={e => onUpdate({ startDate: e.target.value })}
         style={{ fontSize: 11, padding: "4px 8px", border: `1px solid ${task.locked ? "var(--purple)" : "var(--border)"}`, borderRadius: 6, fontFamily: "inherit", outline: "none" }}/>
       <input type="date" value={task.endDate || ""} onChange={e => onUpdate({ endDate: e.target.value })}

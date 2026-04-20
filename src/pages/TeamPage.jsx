@@ -22,10 +22,15 @@ const ORG = [
     manager: null, colour: "var(--amber)",
     members: PEOPLE.filter(p => p.team === "Sales EMEA"),
   },
+  {
+    key: "ta", name: "Technical Architects",
+    manager: null, colour: "#7C4DFF",
+    members: PEOPLE.filter(p => p.team === "Technical Architects"),
+  },
 ];
 
-const ROLE_COLOUR = { cse: "purple", com: "blue", im: "teal", csm: "green", ae: "amber", manager: "grey" };
-const ROLE_LABEL  = { cse: "CSE", com: "COM", im: "IM", csm: "CSM", ae: "AE", manager: "Manager" };
+const ROLE_COLOUR = { cse: "purple", com: "blue", im: "teal", csm: "green", ae: "amber", ta: "purple", manager: "grey" };
+const ROLE_LABEL  = { cse: "CSE", com: "COM", im: "IM", csm: "CSM", ae: "AE", ta: "TA", manager: "Manager" };
 const APP_ROLE_COLOUR = { super_admin: "red", admin: "orange", cse: "purple", csm: "teal", com: "blue", ae: "amber", viewer: "grey" };
 
 function RolePill({ roleKey }) {

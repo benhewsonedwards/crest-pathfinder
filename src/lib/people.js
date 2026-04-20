@@ -248,51 +248,89 @@ export const PEOPLE = [
     location:    "Manchester",
     team:        "Sales EMEA",
   },
+
+  // ── Technical Architects ──────────────────────────────────────────────────────
+  {
+    email:       "jonathan.soakell@safetyculture.io",
+    name:        "Jonathan Soakell",
+    initials:    "JS",
+    role:        "Technical Architect",
+    roleKey:     "ta",
+    title:       "Technical Architect",
+    location:    "Manchester",
+    team:        "Technical Architects",
+  },
 ];
+
+// ─── Stage → default role keys ────────────────────────────────────────────────
+// Which role(s) should appear first in the task owner dropdown for each stage
+export const STAGE_DEFAULT_ROLES = {
+  "opportunity":        ["ae"],
+  "requirements":       ["ae"],
+  "technical-review":   ["ta", "cse"],
+  "onboarding":         ["com"],
+  "solution-delivery":  ["cse"],
+  "go-live":            ["ae", "cse"],
+  "csm-ongoing":        ["csm"],
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Get all people of a given role key: "cse" | "com" | "im" | "csm" | "ae" | "manager" */
+/** Get all people of a given role key */
 export function byRole(roleKey) {
   return PEOPLE.filter(p => p.roleKey === roleKey);
 }
 
-/** Get all COMs (for COM assignment dropdowns) */
-export const COMS = byRole("com");
+export const COMS  = byRole("com");
+export const CSMS  = byRole("csm");
+export const AES   = byRole("ae");
+export const CSES  = byRole("cse");
+export const TAS   = byRole("ta");
 
-/** Get all CSMs */
-export const CSMS = byRole("csm");
-
-/** Get all AEs */
-export const AES = byRole("ae");
-
-/** Get all CSEs */
-export const CSES = byRole("cse");
-
-/** Look up a person by email address (used during Firebase sign-in to link accounts) */
+/** Look up a person by email address */
 export function personByEmail(email) {
   if (!email) return null;
   return PEOPLE.find(p => p.email.toLowerCase() === email.toLowerCase()) || null;
 }
 
-/** Look up a person by name (for legacy string fields) */
+/** Look up a person by name */
 export function personByName(name) {
   if (!name) return null;
   return PEOPLE.find(p => p.name.toLowerCase() === name.toLowerCase()) || null;
 }
 
-/**
- * All people relevant to a given field type.
- * Used to populate dropdowns.
- */
+/** People for a PersonSelect field type */
 export function peopleForField(field) {
   switch (field) {
     case "csm":   return CSMS;
     case "com":   return COMS;
     case "ae":    return AES;
     case "cse":   return CSES;
-    case "owner": return [...CSES, ...COMS, byRole("im"), byRole("manager")].flat();
+    case "ta":    return TAS;
+    case "owner": return [...CSES, ...COMS, byRole("im"), byRole("manager"), TAS].flat();
     case "all":   return PEOPLE;
     default:      return PEOPLE;
   }
 }
+
+/**
+ * For a given stage key, return:
+ *   defaultPeople  — people whose roleKey matches the stage default roles
+ *   otherPeople    — everyone else, grouped by team
+ */
+export function taskAssigneesForStage(stageKey) {
+  const defaultRoles = STAGE_DEFAULT_ROLES[stageKey] || ["cse"];
+  const defaultPeople = PEOPLE.filter(p => defaultRoles.includes(p.roleKey));
+  const defaultEmails = new Set(defaultPeople.map(p => p.email));
+  const otherPeople   = PEOPLE.filter(p => !defaultEmails.has(p.email));
+
+  // Group others by team
+  const grouped = {};
+  otherPeople.forEach(p => {
+    if (!grouped[p.team]) grouped[p.team] = [];
+    grouped[p.team].push(p);
+  });
+
+  return { defaultPeople, grouped };
+}
+

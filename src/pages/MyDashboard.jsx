@@ -8,9 +8,9 @@ import {
 } from "../lib/constants";
 import { Pill, Btn, Input, Textarea, Modal, Spinner, Avatar, Label, FieldGroup } from "../components/UI";
 import { generateCallPrep } from "../lib/callPrepKnowledge";
-import { PEOPLE } from "../lib/people";
+import { PEOPLE, taskAssigneesForStage } from "../lib/people";
 
-const TASK_ASSIGNEES = PEOPLE.filter(p => ["cse", "com", "im", "manager"].includes(p.roleKey));
+// Task assignees resolved per-stage via taskAssigneesForStage()
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function isoToDate(iso) { return iso ? new Date(iso + "T00:00:00") : null; }
@@ -404,25 +404,35 @@ function TaskEditPanel({ task, engagement, users, onSave, onClose }) {
       </div>
 
       <FieldGroup label="Assigned to">
-        <select
-          value={form.ownerEmail || form.ownerUid || ""}
-          onChange={e => {
-            const val = e.target.value;
-            if (val.includes("@")) { upd("ownerEmail", val); upd("ownerUid", ""); }
-            else { upd("ownerUid", val); upd("ownerEmail", ""); }
-          }}
-          style={{ width: "100%", padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontFamily: "inherit", fontSize: 13, background: "var(--surface)", color: "var(--text-primary)", outline: "none" }}
-        >
-          <option value="">— Unassigned —</option>
-          <optgroup label="Team">
-            {TASK_ASSIGNEES.map(p => (
-              <option key={p.email} value={p.email}>{p.name}</option>
-            ))}
-          </optgroup>
-          {(users || []).filter(u => !TASK_ASSIGNEES.find(p => p.email === u.email)).map(u => (
-            <option key={u.uid} value={u.uid}>{u.displayName}</option>
-          ))}
-        </select>
+        {(() => {
+          const { defaultPeople, grouped } = taskAssigneesForStage(task.stageKey);
+          return (
+            <select
+              value={form.ownerEmail || form.ownerUid || ""}
+              onChange={e => {
+                const val = e.target.value;
+                if (val.includes("@")) { upd("ownerEmail", val); upd("ownerUid", ""); }
+                else { upd("ownerUid", val); upd("ownerEmail", ""); }
+              }}
+              style={{ width: "100%", padding: "7px 10px", borderRadius: "var(--radius-sm)", border: "1px solid var(--border)", fontFamily: "inherit", fontSize: 13, background: "var(--surface)", color: "var(--text-primary)", outline: "none" }}
+            >
+              <option value="">— Unassigned —</option>
+              <optgroup label="Typically responsible">
+                {defaultPeople.map(p => (
+                  <option key={p.email} value={p.email}>{p.name}</option>
+                ))}
+              </optgroup>
+              {Object.entries(grouped).map(([team, people]) => (
+                <optgroup key={team} label={team}>
+                  {people.map(p => <option key={p.email} value={p.email}>{p.name}</option>)}
+                </optgroup>
+              ))}
+              {(users || []).filter(u => !PEOPLE.find(p => p.email === u.email)).map(u => (
+                <option key={u.uid} value={u.uid}>{u.displayName}</option>
+              ))}
+            </select>
+          );
+        })()}
       </FieldGroup>
 
       <FieldGroup label="Notes">
