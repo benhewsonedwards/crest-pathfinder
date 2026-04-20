@@ -504,6 +504,205 @@ function CommentaryTab({ activityEntries, engagementComments, engagements, onPos
   );
 }
 
+const SIGNAL_TYPES = [
+  { key: "new_use_case",           label: "New use case",           colour: "#6559FF", bg: "rgba(101,89,255,0.12)" },
+  { key: "new_team",               label: "New team",               colour: "#00D1FF", bg: "rgba(0,209,255,0.12)"  },
+  { key: "seat_expansion",         label: "Seat expansion",         colour: "#00C853", bg: "rgba(0,200,83,0.12)"   },
+  { key: "competitor_displacement", label: "Competitor displacement",colour: "#FF7043", bg: "rgba(255,112,67,0.12)" },
+  { key: "upsell_opportunity",     label: "Upsell opportunity",     colour: "#FFB300", bg: "rgba(255,179,0,0.12)"  },
+  { key: "executive_interest",     label: "Executive interest",     colour: "#AB47BC", bg: "rgba(171,71,188,0.12)" },
+];
+
+const SIGNAL_STATUSES = [
+  { key: "new",           label: "New",            colour: "var(--purple)"    },
+  { key: "shared_ae",     label: "Shared with AE", colour: "var(--blue)"      },
+  { key: "in_pipeline",   label: "In pipeline",    colour: "var(--amber)"     },
+  { key: "won",           label: "Won",            colour: "var(--green)"     },
+  { key: "not_pursued",   label: "Not pursued",    colour: "var(--text-muted)"},
+];
+
+function ExpansionSignals({ customer, canEdit, user, profile }) {
+  const [showForm, setShowForm] = useState(false);
+  const [sigForm, setSigForm]   = useState({ type: "new_use_case", description: "", status: "new" });
+  const [saving, setSaving]     = useState(false);
+
+  const signals       = customer.expansionSignals || [];
+  const activeSignals = signals.filter(s => s.status !== "not_pursued" && s.status !== "won");
+  const closedSignals = signals.filter(s => s.status === "won" || s.status === "not_pursued");
+
+  async function addSignal() {
+    if (!sigForm.description.trim()) return;
+    setSaving(true);
+    const newSignal = {
+      id: Date.now().toString(),
+      type: sigForm.type,
+      description: sigForm.description.trim(),
+      status: sigForm.status,
+      capturedBy: user?.displayName || "Unknown",
+      capturedByRole: profile?.role || null,
+      capturedAt: new Date().toISOString(),
+    };
+    const updated = [...signals, newSignal];
+    await updateDoc(doc(db, "customers", customer.id), {
+      expansionSignals: updated, updatedAt: serverTimestamp(),
+    });
+    await addDoc(collection(db, "customers", customer.id, "audit"), {
+      text: `Expansion signal captured: ${SIGNAL_TYPES.find(t => t.key === sigForm.type)?.label} — "${sigForm.description.trim()}"`,
+      authorName: user?.displayName || "System", authorUid: user?.uid || null,
+      _source: "audit", createdAt: serverTimestamp(),
+    });
+    setSigForm({ type: "new_use_case", description: "", status: "new" });
+    setShowForm(false);
+    setSaving(false);
+  }
+
+  async function updateSignalStatus(sigId, newStatus) {
+    const updated = signals.map(s => s.id === sigId ? { ...s, status: newStatus } : s);
+    await updateDoc(doc(db, "customers", customer.id), {
+      expansionSignals: updated, updatedAt: serverTimestamp(),
+    });
+    const sig = signals.find(s => s.id === sigId);
+    const statusLabel = SIGNAL_STATUSES.find(s => s.key === newStatus)?.label || newStatus;
+    await addDoc(collection(db, "customers", customer.id, "audit"), {
+      text: `Expansion signal status: "${sig?.description?.slice(0, 60)}" → ${statusLabel}`,
+      authorName: user?.displayName || "System", authorUid: user?.uid || null,
+      _source: "audit", createdAt: serverTimestamp(),
+    });
+  }
+
+  async function removeSignal(sigId) {
+    await updateDoc(doc(db, "customers", customer.id), {
+      expansionSignals: signals.filter(s => s.id !== sigId), updatedAt: serverTimestamp(),
+    });
+  }
+
+  return (
+    <Card style={{ gridColumn: "1 / -1" }}>
+      <CardHeader>
+        <Label>Expansion signals</Label>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {signals.length > 0 && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              {activeSignals.length} active{closedSignals.length > 0 ? ` · ${closedSignals.length} closed` : ""}
+            </span>
+          )}
+          {canEdit && (
+            <button onClick={() => setShowForm(f => !f)} style={{
+              fontSize: 11, padding: "3px 10px", borderRadius: 6,
+              border: "1px solid var(--border)", background: showForm ? "var(--purple-light)" : "transparent",
+              color: showForm ? "var(--purple)" : "var(--text-muted)", cursor: "pointer", fontFamily: "inherit",
+            }}>
+              {showForm ? "✕ Cancel" : "+ Add signal"}
+            </button>
+          )}
+        </div>
+      </CardHeader>
+
+      {/* Add form */}
+      {showForm && (
+        <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", background: "var(--surface2)" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div>
+              <Label style={{ marginBottom: 5, display: "block" }}>Signal type</Label>
+              <Select value={sigForm.type} onChange={e => setSigForm(f => ({ ...f, type: e.target.value }))}>
+                {SIGNAL_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </Select>
+            </div>
+            <div>
+              <Label style={{ marginBottom: 5, display: "block" }}>Status</Label>
+              <Select value={sigForm.status} onChange={e => setSigForm(f => ({ ...f, status: e.target.value }))}>
+                {SIGNAL_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </Select>
+            </div>
+          </div>
+          <div style={{ marginBottom: 10 }}>
+            <Label style={{ marginBottom: 5, display: "block" }}>Description</Label>
+            <Input
+              value={sigForm.description}
+              onChange={e => setSigForm(f => ({ ...f, description: e.target.value }))}
+              placeholder="What was said, by whom, in what context..."
+              onKeyDown={e => { if (e.key === "Enter") addSignal(); }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <Btn size="sm" onClick={addSignal} disabled={!sigForm.description.trim() || saving}>
+              {saving ? "Saving..." : "Save signal"}
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {/* Signal list */}
+      {signals.length === 0 && !showForm ? (
+        <div style={{ padding: "20px 18px", textAlign: "center" }}>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 8 }}>No expansion signals captured yet.</p>
+          {canEdit && (
+            <button onClick={() => setShowForm(true)} style={{ fontSize: 12, color: "var(--purple)", background: "none", border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+              + Capture first signal →
+            </button>
+          )}
+        </div>
+      ) : (
+        <div>
+          {activeSignals.map((sig, i) => {
+            const typeMeta   = SIGNAL_TYPES.find(t => t.key === sig.type) || SIGNAL_TYPES[0];
+            const statusMeta = SIGNAL_STATUSES.find(s => s.key === sig.status) || SIGNAL_STATUSES[0];
+            const capturedDate = sig.capturedAt
+              ? new Date(sig.capturedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })
+              : "—";
+            return (
+              <div key={sig.id} style={{
+                display: "flex", gap: 12, padding: "12px 18px", alignItems: "flex-start",
+                borderBottom: (i < activeSignals.length - 1 || closedSignals.length > 0) ? "1px solid var(--border)" : "none",
+              }}>
+                <span style={{ display:"inline-flex", alignItems:"center", padding:"2px 9px", borderRadius:999, fontSize:11, fontWeight:700, background:typeMeta.bg, color:typeMeta.colour, flexShrink:0, marginTop:2, whiteSpace:"nowrap" }}>
+                  {typeMeta.label}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 13, color: "var(--text-primary)", marginBottom: 4, lineHeight: 1.5 }}>{sig.description}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {sig.capturedBy}{sig.capturedByRole ? ` (${sig.capturedByRole.toUpperCase()})` : ""} · {capturedDate}
+                    </span>
+                    {canEdit ? (
+                      <select value={sig.status} onChange={e => updateSignalStatus(sig.id, e.target.value)} style={{ fontSize:11, padding:"1px 6px", borderRadius:6, border:"1px solid var(--border)", background:"transparent", color:statusMeta.colour, cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
+                        {SIGNAL_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+                      </select>
+                    ) : (
+                      <span style={{ fontSize:11, fontWeight:600, color:statusMeta.colour }}>{statusMeta.label}</span>
+                    )}
+                  </div>
+                </div>
+                {canEdit && (
+                  <button onClick={() => removeSignal(sig.id)} style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-muted)", fontSize:14, padding:"2px 4px", flexShrink:0 }} title="Remove">✕</button>
+                )}
+              </div>
+            );
+          })}
+          {closedSignals.length > 0 && (
+            <div style={{ padding: "10px 18px", background: "var(--surface2)" }}>
+              <p style={{ fontSize:11, color:"var(--text-muted)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", marginBottom:8 }}>
+                Closed ({closedSignals.length})
+              </p>
+              {closedSignals.map(sig => {
+                const typeMeta   = SIGNAL_TYPES.find(t => t.key === sig.type) || SIGNAL_TYPES[0];
+                const statusMeta = SIGNAL_STATUSES.find(s => s.key === sig.status) || SIGNAL_STATUSES[0];
+                return (
+                  <div key={sig.id} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6, opacity:0.65 }}>
+                    <span style={{ fontSize:10, padding:"1px 7px", borderRadius:999, background:typeMeta.bg, color:typeMeta.colour, fontWeight:600, flexShrink:0 }}>{typeMeta.label}</span>
+                    <span style={{ fontSize:12, color:"var(--text-muted)", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{sig.description}</span>
+                    <span style={{ fontSize:11, fontWeight:600, color:statusMeta.colour, flexShrink:0 }}>{statusMeta.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
 // ─── Main customer dashboard ──────────────────────────────────────────────────
 export default function CustomerDashboard({ customer, onBack, users, onEditCustomer, onSelectEngagement }) {
   const { user, profile } = useAuth();
@@ -817,6 +1016,9 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
               </Card>
             );
           })()}
+
+          {/* Expansion signals */}
+          <ExpansionSignals customer={customer} canEdit={canEdit} user={user} profile={profile} />
 
           {/* Integration summary */}
           {integrations.length > 0 && (

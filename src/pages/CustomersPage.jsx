@@ -42,6 +42,7 @@ const BLANK_CUSTOMER = {
   csmEmail: "", comEmail: "", aeEmail: "",
   scOrgRoleId: "", periscopeLink: "", notes: "",
   renewalDate: "", renewalARR: "", renewalStatus: "on_track",
+  expansionSignals: [],
 };
 
 export default function CustomersPage({ onSelectCustomer, onNewCustomer }) {
