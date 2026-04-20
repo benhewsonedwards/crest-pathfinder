@@ -2,13 +2,14 @@ import { useAuth } from "../hooks/useAuth";
 import { Avatar } from "./UI";
 
 const NAV_ITEMS = [
-  { id: "dashboard",   icon: "🏠", label: "My Dashboard" },
-  { id: "customers",   icon: "🏢", label: "Customers"   },
-  { id: "pipeline",    icon: "⚡", label: "Pipeline"    },
-  { id: "issues",      icon: "⚠️",  label: "Issues"      },
-  { id: "team",        icon: "👥", label: "Team"         },
-  { id: "sharelinks",  icon: "🔗", label: "Share Links"  },
-  { id: "settings",    icon: "⚙️",  label: "Settings"    },
+  { id: "dashboard",    icon: "🏠", label: "My Dashboard" },
+  { id: "customers",    icon: "🏢", label: "Customers"    },
+  { id: "pipeline",     icon: "⚡", label: "Pipeline"     },
+  { id: "integrations", icon: "🔌", label: "Integrations" },
+  { id: "issues",       icon: "⚠️",  label: "Issues"       },
+  { id: "team",         icon: "👥", label: "Team"          },
+  { id: "sharelinks",   icon: "🔗", label: "Share Links"   },
+  { id: "settings",     icon: "⚙️",  label: "Settings"     },
 ];
 
 export default function Sidebar({ active, onChange }) {

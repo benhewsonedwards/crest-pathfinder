@@ -13,6 +13,7 @@ import CustomerDashboard from "./pages/CustomerDashboard";
 import MyDashboard from "./pages/MyDashboard";
 import SharePage from "./pages/SharePage";
 import ShareLinksPage from "./pages/ShareLinksPage";
+import IntegrationsPage from "./pages/IntegrationsPage";
 import Sidebar from "./components/Sidebar";
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
@@ -168,6 +169,13 @@ function AppShell() {
             onNewEngagement={() => setShowNewModal(true)}
             users={users}
             customers={customers}
+          />
+        ) : page === "integrations" ? (
+          <IntegrationsPage
+            onSelectCustomer={c => {
+              const customer = customers.find(cu => cu.id === c.customerId);
+              if (customer) handleSelectCustomer(customer);
+            }}
           />
         ) : page === "issues" ? (
           <IssuesPage onSelectEngagement={handleSelectEngagement} />
