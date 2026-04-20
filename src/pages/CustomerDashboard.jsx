@@ -703,6 +703,223 @@ function ExpansionSignals({ customer, canEdit, user, profile }) {
   );
 }
 
+const STAKEHOLDER_TIERS = [
+  { key: "executive",    label: "Executive",    colour: "#FF7043", bg: "rgba(255,112,67,0.12)" },
+  { key: "operational",  label: "Operational",  colour: "#00C853", bg: "rgba(0,200,83,0.12)"   },
+  { key: "procurement",  label: "Procurement",  colour: "#FFB300", bg: "rgba(255,179,0,0.12)"  },
+  { key: "technical",    label: "Technical",    colour: "#00D1FF", bg: "rgba(0,209,255,0.12)"  },
+  { key: "other",        label: "Other",        colour: "#78909C", bg: "rgba(120,144,156,0.12)"},
+];
+
+const STAKEHOLDER_OWNERS = [
+  { key: "ae",  label: "AE"  },
+  { key: "csm", label: "CSM" },
+  { key: "cse", label: "CSE" },
+  { key: "com", label: "COM" },
+];
+
+const BLANK_STAKEHOLDER = {
+  name: "", title: "", tier: "operational", owner: "csm", lastContacted: "", note: "",
+};
+
+function StakeholdersTab({ customer, canEdit, user }) {
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm]         = useState(BLANK_STAKEHOLDER);
+  const [editId, setEditId]     = useState(null);
+  const [saving, setSaving]     = useState(false);
+
+  const stakeholders = customer.stakeholders || [];
+
+  function upd(k, v) { setForm(f => ({ ...f, [k]: v })); }
+
+  function startEdit(s) {
+    setForm({ name: s.name, title: s.title || "", tier: s.tier || "operational", owner: s.owner || "csm", lastContacted: s.lastContacted || "", note: s.note || "" });
+    setEditId(s.id);
+    setShowForm(true);
+  }
+
+  function cancelForm() { setShowForm(false); setEditId(null); setForm(BLANK_STAKEHOLDER); }
+
+  async function saveStakeholder() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    let updated;
+    if (editId) {
+      updated = stakeholders.map(s => s.id === editId ? { ...s, ...form } : s);
+    } else {
+      updated = [...stakeholders, { ...form, id: Date.now().toString(), addedBy: user?.displayName || null, addedAt: new Date().toISOString() }];
+    }
+    await updateDoc(doc(db, "customers", customer.id), { stakeholders: updated, updatedAt: serverTimestamp() });
+    cancelForm();
+    setSaving(false);
+  }
+
+  async function removeStakeholder(id) {
+    await updateDoc(doc(db, "customers", customer.id), {
+      stakeholders: stakeholders.filter(s => s.id !== id), updatedAt: serverTimestamp(),
+    });
+  }
+
+  // Group by tier for display
+  const byTier = STAKEHOLDER_TIERS.map(t => ({
+    ...t,
+    items: stakeholders.filter(s => (s.tier || "other") === t.key),
+  })).filter(t => t.items.length > 0 || (showForm && !editId));
+
+  return (
+    <div>
+      {/* Header row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, color: "var(--text-primary)", marginBottom: 2 }}>
+            Stakeholder map
+          </p>
+          <p style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            {stakeholders.length} contact{stakeholders.length !== 1 ? "s" : ""} · who to engage, who owns the relationship, when last contacted
+          </p>
+        </div>
+        {canEdit && (
+          <Btn size="sm" onClick={() => { cancelForm(); setShowForm(f => !f); }}>
+            {showForm && !editId ? "✕ Cancel" : "+ Add contact"}
+          </Btn>
+        )}
+      </div>
+
+      {/* Add / Edit form */}
+      {showForm && (
+        <Card style={{ marginBottom: 16, padding: 18 }}>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 13, color: "var(--text-primary)", marginBottom: 14 }}>
+            {editId ? "Edit contact" : "Add contact"}
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+            <FieldGroup label="Name">
+              <Input value={form.name} onChange={e => upd("name", e.target.value)} placeholder="e.g. Sarah Chen" autoFocus />
+            </FieldGroup>
+            <FieldGroup label="Job title">
+              <Input value={form.title} onChange={e => upd("title", e.target.value)} placeholder="e.g. Head of EHS" />
+            </FieldGroup>
+            <FieldGroup label="Seniority tier">
+              <Select value={form.tier} onChange={e => upd("tier", e.target.value)}>
+                {STAKEHOLDER_TIERS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </Select>
+            </FieldGroup>
+            <FieldGroup label="Relationship owner">
+              <Select value={form.owner} onChange={e => upd("owner", e.target.value)}>
+                {STAKEHOLDER_OWNERS.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </Select>
+            </FieldGroup>
+            <FieldGroup label="Last contacted">
+              <Input value={form.lastContacted} onChange={e => upd("lastContacted", e.target.value)} type="date" />
+            </FieldGroup>
+            <FieldGroup label="Note (optional)">
+              <Input value={form.note} onChange={e => upd("note", e.target.value)} placeholder="Context, relationship quality, next step..." />
+            </FieldGroup>
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Btn variant="ghost" size="sm" onClick={cancelForm}>Cancel</Btn>
+            <Btn size="sm" onClick={saveStakeholder} disabled={!form.name.trim() || saving}>
+              {saving ? "Saving..." : editId ? "Save changes" : "Add contact"}
+            </Btn>
+          </div>
+        </Card>
+      )}
+
+      {/* Empty state */}
+      {stakeholders.length === 0 && !showForm && (
+        <Card style={{ padding: "40px 20px", textAlign: "center" }}>
+          <p style={{ fontSize: 32, marginBottom: 10 }}>👥</p>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 15, color: "var(--text-primary)", marginBottom: 6 }}>
+            No stakeholders mapped yet
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", maxWidth: 380, margin: "0 auto 16px" }}>
+            Map the key contacts at this account — who owns which relationship, when they were last engaged, and what level of seniority they represent.
+          </p>
+          {canEdit && <Btn onClick={() => setShowForm(true)}>+ Add first contact</Btn>}
+        </Card>
+      )}
+
+      {/* Grouped by tier */}
+      {stakeholders.length > 0 && STAKEHOLDER_TIERS.filter(t => stakeholders.some(s => (s.tier || "other") === t.key)).map(tier => {
+        const items = stakeholders.filter(s => (s.tier || "other") === tier.key);
+        return (
+          <div key={tier.key} style={{ marginBottom: 12 }}>
+            {/* Tier header */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: tier.colour, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: tier.colour, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+                {tier.label}
+              </span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>· {items.length}</span>
+            </div>
+
+            {/* Contact cards */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 10 }}>
+              {items.map(s => {
+                const ownerMeta = STAKEHOLDER_OWNERS.find(o => o.key === s.owner);
+                const daysSince = s.lastContacted
+                  ? Math.floor((Date.now() - new Date(s.lastContacted)) / 86400000)
+                  : null;
+                const contactColour = daysSince === null ? "var(--text-muted)"
+                  : daysSince > 60 ? "var(--red)"
+                  : daysSince > 30 ? "var(--amber)"
+                  : "var(--green)";
+                return (
+                  <div key={s.id} style={{
+                    background: "var(--surface2)", border: `1px solid ${tier.colour}30`,
+                    borderRadius: "var(--radius)", padding: "14px 16px",
+                    position: "relative",
+                  }}>
+                    {/* Actions */}
+                    {canEdit && (
+                      <div style={{ position: "absolute", top: 10, right: 10, display: "flex", gap: 4 }}>
+                        <button onClick={() => startEdit(s)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "2px 5px", borderRadius: 4 }} title="Edit">✎</button>
+                        <button onClick={() => removeStakeholder(s.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", fontSize: 12, padding: "2px 5px", borderRadius: 4 }} title="Remove">✕</button>
+                      </div>
+                    )}
+
+                    {/* Name + title */}
+                    <p style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)", marginBottom: 2, paddingRight: 40 }}>{s.name}</p>
+                    {s.title && <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>{s.title}</p>}
+
+                    {/* Meta row */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: s.note ? 8 : 0 }}>
+                      {/* Owner badge */}
+                      <span style={{
+                        fontSize: 10, fontWeight: 700, padding: "1px 7px", borderRadius: 999,
+                        background: "var(--surface)", border: "1px solid var(--border)",
+                        color: "var(--text-second)", textTransform: "uppercase", letterSpacing: "0.05em",
+                      }}>
+                        {ownerMeta?.label || s.owner} owned
+                      </span>
+                      {/* Last contact */}
+                      <span style={{
+                        fontSize: 10, fontWeight: 600, padding: "1px 7px", borderRadius: 999,
+                        background: "var(--surface)", border: `1px solid ${contactColour}44`,
+                        color: contactColour,
+                      }}>
+                        {daysSince === null ? "Not yet contacted"
+                          : daysSince === 0 ? "Contacted today"
+                          : `Last contact ${daysSince}d ago`}
+                      </span>
+                    </div>
+
+                    {/* Note */}
+                    {s.note && (
+                      <p style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginTop: 6, fontStyle: "italic" }}>
+                        "{s.note}"
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── Main customer dashboard ──────────────────────────────────────────────────
 export default function CustomerDashboard({ customer, onBack, users, onEditCustomer, onSelectEngagement }) {
   const { user, profile } = useAuth();
@@ -900,12 +1117,13 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
 
       {/* Tabs */}
       <Tabs tabs={[
-        { id: "overview",     label: "Overview" },
-        { id: "integrations", label: "Integrations", badge: integrations.length || null },
-        { id: "tickets",      label: "Request history", badge: openTickets.length || null },
-        { id: "engagements",  label: "Engagements", badge: engagements.length || null },
-        { id: "commentary",   label: "Commentary" },
-        { id: "activity",     label: "Activity log" },
+        { id: "overview",      label: "Overview" },
+        { id: "stakeholders",  label: "Stakeholders" },
+        { id: "integrations",  label: "Integrations", badge: integrations.length || null },
+        { id: "tickets",       label: "Request history", badge: openTickets.length || null },
+        { id: "engagements",   label: "Engagements", badge: engagements.length || null },
+        { id: "commentary",    label: "Commentary" },
+        { id: "activity",      label: "Activity log" },
       ]} active={tab} onChange={setTab} style={{ marginBottom: 18 }} />
 
       {/* ── OVERVIEW ── */}
@@ -1259,6 +1477,11 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
             </Card>
           )}
         </div>
+      )}
+
+      {/* ── STAKEHOLDERS ── */}
+      {tab === "stakeholders" && (
+        <StakeholdersTab customer={customer} canEdit={canEdit} user={user} profile={profile} />
       )}
 
       {/* ── COMMENTARY ── */}
