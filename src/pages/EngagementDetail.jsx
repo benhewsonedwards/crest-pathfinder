@@ -11,6 +11,7 @@ import {
 import { Card, CardHeader, Label, Pill, Avatar, Btn, Tabs, Input, Select, Textarea, Modal, FieldGroup, Spinner } from "../components/UI";
 import CapturePanel, { captureCompleteness } from "../components/CapturePanel";
 import { personByEmail, PEOPLE, taskAssigneesForStage } from "../lib/people";
+import EngagementModal from "../components/EngagementModal";
 
 // Task assignees resolved per-stage via taskAssigneesForStage()
 
@@ -720,6 +721,7 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
   const [saving, setSaving] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [showLinkCustomer, setShowLinkCustomer] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
 
@@ -861,6 +863,9 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
           ← All engagements
         </button>
         <div style={{ display: "flex", gap: 8 }}>
+          {canEdit && (
+            <Btn variant="ghost" size="sm" onClick={() => setShowEdit(true)}>✎ Edit engagement</Btn>
+          )}
           {/* Linked customer badge or link button */}
           {engagement.customerId && onOpenCustomer ? (
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -1351,6 +1356,15 @@ export default function EngagementDetail({ engagement, onBack, users, onOpenCust
           </Btn>
         </div>
       </Modal>
+
+      {/* Edit engagement modal */}
+      <EngagementModal
+        open={showEdit}
+        onClose={() => setShowEdit(false)}
+        initial={engagement}
+        customers={customers}
+        users={[]}
+      />
     </div>
   );
 }
