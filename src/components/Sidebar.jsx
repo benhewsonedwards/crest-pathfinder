@@ -5,7 +5,6 @@ const NAV_ITEMS = [
   { id: "dashboard",   icon: "🏠", label: "My Dashboard" },
   { id: "customers",   icon: "🏢", label: "Customers"   },
   { id: "pipeline",    icon: "⚡", label: "Pipeline"    },
-  { id: "engagements", icon: "🗂️",  label: "Engagements" },
   { id: "issues",      icon: "⚠️",  label: "Issues"      },
   { id: "team",        icon: "👥", label: "Team"         },
   { id: "sharelinks",  icon: "🔗", label: "Share Links"  },

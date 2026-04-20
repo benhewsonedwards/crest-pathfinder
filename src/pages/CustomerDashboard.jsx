@@ -306,7 +306,7 @@ function ShareableView({ customer, integrations, engagements, onClose, onPublish
 }
 
 // ─── Main customer dashboard ──────────────────────────────────────────────────
-export default function CustomerDashboard({ customer, onBack, users, onEditCustomer }) {
+export default function CustomerDashboard({ customer, onBack, users, onEditCustomer, onSelectEngagement }) {
   const { profile } = useAuth();
   const [integrations, setIntegrations] = useState([]);
   const [engagements, setEngagements] = useState([]);
@@ -715,24 +715,39 @@ export default function CustomerDashboard({ customer, onBack, users, onEditCusto
             <EmptyState icon="🗂️" title="No engagements linked" description="Engagements appear here when linked to this customer" />
           ) : (
             <Card>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 80px 70px", gap: 10, padding: "8px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-                {["Engagement", "Stage", "RAG", "ARR"].map(h => <Label key={h}>{h}</Label>)}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 80px 70px 60px", gap: 10, padding: "8px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+                {["Engagement", "Stage", "RAG", "ARR", ""].map(h => <Label key={h}>{h}</Label>)}
               </div>
               {engagements.map((e, i) => {
                 const stage = STAGES.find(s => s.key === e.currentStage);
                 const rag = RAG_STATUSES.find(r => r.key === e.ragStatus) || RAG_STATUSES[0];
                 return (
-                  <div key={e.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px 80px 70px", gap: 10, padding: "11px 18px", borderBottom: i < engagements.length - 1 ? "1px solid var(--border)" : "none", alignItems: "center" }}>
+                  <div key={e.id}
+                    onClick={() => onSelectEngagement?.(e)}
+                    style={{
+                      display: "grid", gridTemplateColumns: "1fr 120px 80px 70px 60px",
+                      gap: 10, padding: "11px 18px",
+                      borderBottom: i < engagements.length - 1 ? "1px solid var(--border)" : "none",
+                      alignItems: "center",
+                      cursor: onSelectEngagement ? "pointer" : "default",
+                      transition: "background 0.1s",
+                    }}
+                    onMouseEnter={e2 => { if (onSelectEngagement) e2.currentTarget.style.background = "var(--purple-light)"; }}
+                    onMouseLeave={e2 => { e2.currentTarget.style.background = "transparent"; }}
+                  >
                     <div>
-                      <p style={{ fontSize: 13, fontWeight: 500 }}>{e.csId || e.jiraKey || "—"}</p>
+                      <p style={{ fontSize: 13, fontWeight: 500 }}>{e.csId || e.jiraKey || e.customer || "—"}</p>
                       {e.notes && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{e.notes?.slice(0, 80)}{e.notes?.length > 80 ? "…" : ""}</p>}
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                       <span style={{ fontSize: 13 }}>{stage?.icon}</span>
-                      <span style={{ fontSize: 11, color: stage?.colour, fontWeight: 600 }}>{stage?.shortLabel}</span>
+                      <span style={{ fontSize: 11, color: stage?.colour, fontWeight: 600 }}>{stage?.label || stage?.shortLabel}</span>
                     </div>
-                    <Pill color={rag.key === "green" ? "green" : rag.key === "red" ? "red" : "amber"} style={{ fontSize: 10 }}>{rag.emoji}</Pill>
+                    <Pill color={rag.key === "green" ? "green" : rag.key === "red" ? "red" : "amber"} style={{ fontSize: 10 }}>{rag.emoji} {rag.label}</Pill>
                     <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{e.arr ? `£${Number(e.arr).toLocaleString()}` : "—"}</span>
+                    {onSelectEngagement && (
+                      <span style={{ fontSize: 11, color: "var(--purple)", fontWeight: 600 }}>Open →</span>
+                    )}
                   </div>
                 );
               })}

@@ -85,7 +85,7 @@ function AppShell() {
   function handleSelectEngagement(eng) {
     setSelectedEngagement(eng);
     setSelectedCustomer(null);
-    setPage("engagements");
+    setPage("pipeline");
   }
 
   function handleSelectCustomer(customer) {
@@ -110,7 +110,7 @@ function AppShell() {
 
   function handleNav(p) {
     setPage(p);
-    if (p !== "engagements") setSelectedEngagement(null);
+    if (p !== "pipeline") setSelectedEngagement(null);
     if (p !== "customers") setSelectedCustomer(null);
   }
 
@@ -136,6 +136,7 @@ function AppShell() {
             customer={selectedCustomer}
             onBack={() => { setSelectedCustomer(null); setPage("customers"); }}
             users={users}
+            onSelectEngagement={handleSelectEngagement}
             onEditCustomer={(c) => {
               // Navigate back to customers list; CustomersPage will show edit modal
               // We use a URL-style signal via a ref so CustomersPage can pick it up
