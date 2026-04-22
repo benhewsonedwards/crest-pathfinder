@@ -519,7 +519,7 @@ function TaskCard({ item, users, onEdit, onToggleDone }) {
   const stageDef = STAGES.find(s => s.key === task.stageKey);
   // Resolve owner: try Firebase UID first, then email from directory
   const ownerByUid = users?.find(u => u.uid === task.ownerUid);
-  const ownerByEmail = task.ownerEmail ? TASK_ASSIGNEES.find(p => p.email === task.ownerEmail) : null;
+  const ownerByEmail = task.ownerEmail ? PEOPLE.find(p => p.email === task.ownerEmail) : null;
   const owner = ownerByUid || (ownerByEmail ? { displayName: ownerByEmail.name, photoURL: null } : null);
   const today = todayIso();
   const isOverdue = !task.done && task.endDate && task.endDate < today;
