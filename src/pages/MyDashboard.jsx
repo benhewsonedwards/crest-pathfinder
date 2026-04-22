@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import React from "react";
 import { collection, onSnapshot, doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
@@ -330,7 +331,7 @@ function TaskEditPanel({ task, stageKey, engagement, users, onSave, onClose }) {
     ownerUid:   task.ownerUid || "",
     ownerEmail: task.ownerEmail || "",
     done:       task.done || false,
-    notes:      task.notes || "",
+    notes:      Array.isArray(task.notes) ? (task.notes.map(n => n.text || "").join("\n")) : (task.notes || ""),
     locked:     task.locked || false,
   });
   const [saving, setSaving] = useState(false);
@@ -767,12 +768,16 @@ export default function MyDashboard({ onSelectEngagement, users }) {
   // Flatten all tasks across all engagements with context
   const allItems = useMemo(() => {
     const items = [];
-    const today = todayIso();
     engagements.forEach(eng => {
       const keys = eng.planType === "Enhancement" ? ENHANCEMENT_STAGE_KEYS : STAGE_KEYS;
       keys.forEach(sk => {
         (eng.stageTasks?.[sk] || []).forEach(task => {
-          items.push({ task, engagement: eng, stageKey: sk });
+          // Normalise notes — can be string (legacy) or array (new format) — always use array
+          const normalisedTask = {
+            ...task,
+            notes: Array.isArray(task.notes) ? task.notes : (task.notes ? [{ text: task.notes, at: null }] : []),
+          };
+          items.push({ task: normalisedTask, engagement: eng, stageKey: sk });
         });
       });
     });
@@ -1138,5 +1143,39 @@ export default function MyDashboard({ onSelectEngagement, users }) {
         )}
       </Modal>
     </div>
+  );
+}
+
+// ─── Error boundary ───────────────────────────────────────────────────────────
+class DashboardErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: "40px 28px", textAlign: "center" }}>
+          <p style={{ fontSize: 32, marginBottom: 12 }}>⚠️</p>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 16, marginBottom: 8 }}>
+            Dashboard ran into a problem
+          </p>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 20, maxWidth: 400, margin: "0 auto 20px" }}>
+            {this.state.error?.message || "An unexpected error occurred loading your tasks."}
+          </p>
+          <button onClick={() => this.setState({ error: null })}
+            style={{ padding: "9px 20px", borderRadius: 10, background: "var(--purple)", color: "white", border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 13, fontWeight: 600 }}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export function MyDashboardWithBoundary(props) {
+  return (
+    <DashboardErrorBoundary>
+      <MyDashboard {...props} />
+    </DashboardErrorBoundary>
   );
 }
