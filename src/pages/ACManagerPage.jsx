@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Card, CardHeader, Label, Pill, Btn, Avatar } from "../components/UI";
-import ACRequestDrawer from "../components/ACRequestDrawer";
+import ACRequestPage from "./ACRequestPage";
 
 // ─── Ranking helpers ──────────────────────────────────────────────────────────
 
@@ -121,12 +121,12 @@ function ColHead({ label, width, right = false, style }) {
 // ─── Score bar ────────────────────────────────────────────────────────────────
 
 function ScoreBar({ score }) {
-  const pct = Math.min(score * 100, 100);
+  const pct = score * 100;
   const colour = pct >= 70 ? "var(--red)" : pct >= 40 ? "var(--amber)" : "var(--green)";
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6, width: 80 }}>
       <div style={{ flex: 1, height: 4, background: "var(--border)", borderRadius: 99, overflow: "hidden" }}>
-        <div style={{ width: `${pct}%`, height: "100%", background: colour, borderRadius: 99 }} />
+        <div style={{ width: `${Math.min(pct, 100)}%`, height: "100%", background: colour, borderRadius: 99 }} />
       </div>
       <span style={{ fontSize: 11, fontWeight: 600, color: colour, flexShrink: 0, width: 26, textAlign: "right" }}>
         {Math.round(pct)}
@@ -281,6 +281,22 @@ export default function ACManagerPage() {
   const [selectedReq, setSelectedReq] = useState(null);
   const [loadingReqs, setLoadingReqs] = useState(true);
 
+  // If a request is selected, render the full detail page
+  const liveSelected = selectedReq
+    ? requests.find(r => r.id === selectedReq.id) ?? selectedReq
+    : null;
+
+  if (liveSelected) {
+    return (
+      <ACRequestPage
+        req={liveSelected}
+        milestones={milestoneMap[liveSelected.id] || []}
+        weights={weights}
+        onBack={() => setSelectedReq(null)}
+      />
+    );
+  }
+
   // Live subscribe to acRequests
   useEffect(() => {
     const unsub = onSnapshot(
@@ -336,11 +352,6 @@ export default function ACManagerPage() {
     return !ms.some(m => !m.completed && (m.date?.toDate ? m.date.toDate() : new Date(m.date)) > new Date());
   }).length;
   const escalated = requests.filter(r => (r.escalationMultiplier ?? 1) !== 1).length;
-
-  // Keep selected request live when drawer is open
-  const liveSelected = selectedReq
-    ? requests.find(r => r.id === selectedReq.id) ?? selectedReq
-    : null;
 
   return (
     <div style={{ padding: "24px 28px 48px", position: "relative" }}>
@@ -455,16 +466,6 @@ export default function ACManagerPage() {
         Score = weighted combination of ARR, priority, deadline proximity, and work estimate × escalation multiplier.
         Adjust weights in Settings.
       </p>
-
-      {/* Drawer */}
-      {liveSelected && (
-        <ACRequestDrawer
-          req={liveSelected}
-          milestones={milestoneMap[liveSelected.id] || []}
-          weights={weights}
-          onClose={() => setSelectedReq(null)}
-        />
-      )}
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
