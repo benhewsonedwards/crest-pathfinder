@@ -101,6 +101,27 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ─── /acRequests ──────────────────────────────────────────────────────────
+    match /acRequests/{requestId} {
+      allow read:   if isViewer();
+      allow create: if isTeamMember();
+      allow update: if isTeamMember();
+      allow delete: if isAdmin();
+
+      match /milestones/{milestoneId} {
+        allow read:   if isViewer();
+        allow create: if isTeamMember();
+        allow update: if isTeamMember();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ─── /acrSettings ─────────────────────────────────────────────────────────
+    match /acrSettings/{docId} {
+      allow read:   if isViewer();
+      allow write:  if isAdmin();
+    }
+
     // ─── /shareLinks ──────────────────────────────────────────────────────────
     // Public read/update — the 32-char random token in the URL is the access
     // control. Customers look up by token; access count is tracked on each load.

@@ -283,26 +283,30 @@ export default function ACManagerPage() {
 
   // Live subscribe to acRequests
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, "acRequests"), snap => {
-      const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setRequests(docs);
-      setLoadingReqs(false);
-
-      // Fetch milestones for each request
-      docs.forEach(req => {
-        const msUnsub = onSnapshot(
-          collection(db, "acRequests", req.id, "milestones"),
-          msSnap => {
-            setMilestones(prev => ({
-              ...prev,
-              [req.id]: msSnap.docs.map(d => ({ id: d.id, ...d.data() })),
-            }));
-          }
-        );
-        // Note: in production these would be cleaned up; acceptable for this page's lifetime
-        return msUnsub;
-      });
-    });
+    const unsub = onSnapshot(
+      collection(db, "acRequests"),
+      snap => {
+        const docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setRequests(docs);
+        setLoadingReqs(false);
+        docs.forEach(req => {
+          onSnapshot(
+            collection(db, "acRequests", req.id, "milestones"),
+            msSnap => {
+              setMilestones(prev => ({
+                ...prev,
+                [req.id]: msSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+              }));
+            },
+            err => console.warn("Milestone fetch error:", req.id, err.message)
+          );
+        });
+      },
+      err => {
+        console.error("acRequests snapshot error:", err.message);
+        setLoadingReqs(false);
+      }
+    );
     return unsub;
   }, []);
 
