@@ -305,7 +305,7 @@ function MilestoneRow({ m, onToggle, onDelete, onSave }) {
         {m.note && (
           <p style={{ fontSize: 12, color: "var(--text-second)", marginTop: 3, lineHeight: 1.5 }}>{m.note}</p>
         )}
-        {!m.note && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, fontStyle: "italic" }}>click to edit</p>}
+
       </div>
       <button
         onClick={() => onDelete(m.id)}
@@ -858,11 +858,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
           <Pill color={req.requestType === "Technical" ? "blue" : req.requestType === "Onboarding" ? "teal" : "purple"}>
             {req.requestType}
           </Pill>
-          {isEscalated && (
-            <Pill color={(req.escalationMultiplier ?? 1) > 1 ? "red" : "grey"}>
-              {(req.escalationMultiplier ?? 1) > 1 ? "↑ Escalated" : "↓ De-prioritised"}
-            </Pill>
-          )}
+
           {isOverdueFlag && (
             <Pill color="red">🔴 Overdue milestone</Pill>
           )}
