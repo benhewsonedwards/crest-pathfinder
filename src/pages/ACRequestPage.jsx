@@ -6,7 +6,7 @@ import {
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { Btn, Pill, Avatar, Label, Textarea, Select, Input, useToast, ToastContainer } from "../components/UI";
-import { calcScore } from "./ACManagerPage";
+import { calcScore } from "../lib/acRanking";
 
 // ─── Milestone config ─────────────────────────────────────────────────────────
 
