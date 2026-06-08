@@ -6,7 +6,7 @@ import {
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { Btn, Pill, Avatar, Label, Textarea, Select, Input, useToast, ToastContainer } from "../components/UI";
-import { calcScore } from "../lib/acRanking";
+import { calcScore, DEFAULT_ARR_CEILING } from "../lib/acRanking";
 
 // ─── Milestone config ─────────────────────────────────────────────────────────
 
@@ -421,7 +421,7 @@ function EscalationPanel({ req }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function ACRequestPage({ req, milestones, weights, onBack }) {
+export default function ACRequestPage({ req, milestones, weights, arrCeiling = DEFAULT_ARR_CEILING, onBack }) {
   const { user } = useAuth();
   const { toasts, toast } = useToast();
 
@@ -461,7 +461,7 @@ export default function ACRequestPage({ req, milestones, weights, onBack }) {
     }
   }
 
-  const score = calcScore(req, weights);
+  const score = calcScore(req, weights, arrCeiling);
   const isEscalated = (req.escalationMultiplier ?? 1) !== 1;
 
   // Derive next meeting and next deadline from milestones

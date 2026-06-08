@@ -15,6 +15,7 @@ import SharePage from "./pages/SharePage";
 import ShareLinksPage from "./pages/ShareLinksPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
 import ACManagerPage from "./pages/ACManagerPage";
+import SettingsPage from "./pages/SettingsPage";
 import Sidebar, { normaliseRole } from "./components/Sidebar"; // required
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
@@ -207,72 +208,7 @@ function AppShell() {
         ) : page === "ac-manager" ? (
           <ACManagerPage />
         ) : page === "settings" ? (
-          <div style={{ padding: "24px 28px 48px", maxWidth: 680 }}>
-            <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 4 }}>Settings</h1>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 24 }}>Platform configuration and status.</p>
-
-            {/* Security status */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--green)", borderRadius: "var(--radius-lg)", padding: "16px 20px", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ color: "var(--green)", fontSize: 16 }}>✓</span>
-                <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, color: "var(--green)" }}>Firestore security rules deployed</h3>
-              </div>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Database is locked down to @safetyculture.io accounts. Indexes deployed. Rules last updated 20 Apr 2026.</p>
-            </div>
-
-            {/* File storage */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px 20px", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ color: "var(--amber)", fontSize: 16 }}>◐</span>
-                <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14 }}>File uploads — Blaze plan required</h3>
-              </div>
-              <p style={{ fontSize: 12, color: "var(--text-muted)" }}>Task file attachments and customer document uploads require Firebase Storage (Blaze pay-as-you-go plan). UI is in place — upgrade Firebase to activate. Storage rules are written and committed, ready to deploy.</p>
-            </div>
-
-            {/* Data seed */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "16px 20px", marginBottom: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-                <span style={{ color: "var(--text-muted)", fontSize: 16 }}>○</span>
-                <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14 }}>EMEA data seed</h3>
-              </div>
-              <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 10 }}>11 EMEA engagements ready to seed. Requires Firebase Admin service account key.</p>
-              <div style={{ background: "var(--surface2)", borderRadius: "var(--radius-sm)", padding: "10px 14px", fontFamily: "monospace", fontSize: 11, color: "var(--text-second)", lineHeight: 1.8 }}>
-                1. Firebase console → Project Settings → Service accounts → Generate new private key{"\n"}
-                2. Save as scripts/serviceAccount.json{"\n"}
-                3. node scripts/seed-emea.mjs
-              </div>
-            </div>
-
-            {/* Roadmap */}
-            <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "20px 24px" }}>
-              <h3 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 12 }}>🗺 Roadmap</h3>
-              {[
-                { done: true,  label: "Customer lifecycle management (7 stages)" },
-                { done: true,  label: "Data capture forms (all stages)" },
-                { done: true,  label: "Integration portfolio per customer" },
-                { done: true,  label: "Integrations page — grouped by type, search, drill-through" },
-                { done: true,  label: "Customer share links with task interaction" },
-                { done: true,  label: "Role-based access (CSE / CSM / COM / AE / TA / Admin)" },
-                { done: true,  label: "Firestore security rules + indexes deployed" },
-                { done: true,  label: "Task notes & internal file attach (UI ready)" },
-                { done: true,  label: "My Dashboard — calendar, task list, call prep" },
-                { amber: true, label: "File uploads — waiting on Blaze plan upgrade" },
-                { amber: true, label: "EMEA data seed — needs service account key" },
-                { done: false, label: "Salesforce sync — auto-pull CS Requests" },
-                { done: false, label: "Jira sync — live ticket status in engagement view" },
-                { done: false, label: "Email notifications — overdue tasks & stage advances" },
-                { done: false, label: "Global search (Cmd+K)" },
-                { done: false, label: "Stage completion gates — warn on required tasks" },
-              ].map((item, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: i < 15 ? "1px solid var(--border)" : "none" }}>
-                  <span style={{ color: item.done ? "var(--green)" : item.amber ? "var(--amber)" : "var(--text-muted)", fontSize: 13, flexShrink: 0 }}>
-                    {item.done ? "✓" : item.amber ? "◐" : "○"}
-                  </span>
-                  <span style={{ fontSize: 13, color: item.done ? "var(--text-second)" : "var(--text-primary)" }}>{item.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <SettingsPage />
         ) : null}
       </main>
 

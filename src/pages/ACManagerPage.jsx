@@ -3,7 +3,7 @@ import { collection, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { Card, CardHeader, Label, Pill, Btn, Avatar } from "../components/UI";
 import ACRequestPage from "./ACRequestPage";
-import { calcScore, DEFAULT_WEIGHTS } from "../lib/acRanking";
+import { calcScore, DEFAULT_WEIGHTS, DEFAULT_ARR_CEILING } from "../lib/acRanking";
 
 
 // ─── Flag helpers ─────────────────────────────────────────────────────────────
@@ -112,9 +112,9 @@ function ScoreBar({ score }) {
 
 // ─── Request row ─────────────────────────────────────────────────────────────
 
-function RequestRow({ req, rank, milestones, weights, onClick, tab }) {
+function RequestRow({ req, rank, milestones, weights, arrCeiling, onClick, tab }) {
   const [hovered, setHovered] = useState(false);
-  const score = calcScore(req, weights);
+  const score = calcScore(req, weights, arrCeiling);
   const flags = getFlags(req, milestones);
   const du = daysUntil(req.nextDeadline || req.preferredCompletion);
 
@@ -256,6 +256,7 @@ export default function ACManagerPage() {
   const [selectedReq, setSelectedReq] = useState(null);
   const [loadingReqs, setLoadingReqs] = useState(true);
   const [assignedFilter, setAssignedFilter] = useState("all");
+  const [arrCeiling, setArrCeiling] = useState(DEFAULT_ARR_CEILING);
 
   // Live subscribe to acRequests
   useEffect(() => {
@@ -289,8 +290,9 @@ export default function ACManagerPage() {
   // Load ranking weights from acrSettings
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "acrSettings", "config"), snap => {
-      if (snap.exists() && snap.data().rankingWeights) {
-        setWeights(snap.data().rankingWeights);
+      if (snap.exists()) {
+        if (snap.data().rankingWeights) setWeights(snap.data().rankingWeights);
+        if (snap.data().arrCeiling)    setArrCeiling(snap.data().arrCeiling);
       }
     });
     return unsub;
@@ -308,7 +310,7 @@ export default function ACManagerPage() {
     return true;
   });
   const sorted = [...filtered].sort((a, b) =>
-    calcScore(b, weights) - calcScore(a, weights)
+    calcScore(b, weights, arrCeiling) - calcScore(a, weights, arrCeiling)
   );
 
   // Stats for header
@@ -331,6 +333,7 @@ export default function ACManagerPage() {
         req={liveSelected}
         milestones={milestoneMap[liveSelected.id] || []}
         weights={weights}
+        arrCeiling={arrCeiling}
         onBack={() => setSelectedReq(null)}
       />
     );
@@ -474,6 +477,7 @@ export default function ACManagerPage() {
               rank={i + 1}
               milestones={milestoneMap[req.id]}
               weights={weights}
+              arrCeiling={arrCeiling}
               tab={tab}
               onClick={() => setSelectedReq(req)}
             />
