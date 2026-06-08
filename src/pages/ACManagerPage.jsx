@@ -256,22 +256,6 @@ export default function ACManagerPage() {
   const [selectedReq, setSelectedReq] = useState(null);
   const [loadingReqs, setLoadingReqs] = useState(true);
 
-  // If a request is selected, render the full detail page
-  const liveSelected = selectedReq
-    ? requests.find(r => r.id === selectedReq.id) ?? selectedReq
-    : null;
-
-  if (liveSelected) {
-    return (
-      <ACRequestPage
-        req={liveSelected}
-        milestones={milestoneMap[liveSelected.id] || []}
-        weights={weights}
-        onBack={() => setSelectedReq(null)}
-      />
-    );
-  }
-
   // Live subscribe to acRequests
   useEffect(() => {
     const unsub = onSnapshot(
@@ -327,6 +311,22 @@ export default function ACManagerPage() {
     return !ms.some(m => !m.completed && (m.date?.toDate ? m.date.toDate() : new Date(m.date)) > new Date());
   }).length;
   const escalated = requests.filter(r => (r.escalationMultiplier ?? 1) !== 1).length;
+
+  // Derive live selected — after all hooks
+  const liveSelected = selectedReq
+    ? requests.find(r => r.id === selectedReq.id) ?? selectedReq
+    : null;
+
+  if (liveSelected) {
+    return (
+      <ACRequestPage
+        req={liveSelected}
+        milestones={milestoneMap[liveSelected.id] || []}
+        weights={weights}
+        onBack={() => setSelectedReq(null)}
+      />
+    );
+  }
 
   return (
     <div style={{ padding: "24px 28px 48px", position: "relative" }}>
