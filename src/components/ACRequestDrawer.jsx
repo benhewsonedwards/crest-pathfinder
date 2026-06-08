@@ -428,8 +428,8 @@ export default function ACRequestDrawer({ req, milestones, weights, onClose }) {
           </Pill>
         </FieldRow>
         <FieldRow label="Priority">
-          <Pill color={{ Critical:"red", High:"orange", Medium:"amber", Low:"grey" }[req.sfPriority] || "grey"} style={{ fontSize: 11 }}>
-            {req.sfPriority || "—"}
+          <Pill color={{ Critical:"red", High:"orange", Medium:"amber", Low:"grey" }[req.priority] || "grey"} style={{ fontSize: 11 }}>
+            {req.priority || "—"}
           </Pill>
         </FieldRow>
         <FieldRow label="ARR">

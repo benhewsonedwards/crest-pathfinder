@@ -21,7 +21,7 @@ function normDeadline(req) {
 export function calcScore(req, weights = DEFAULT_WEIGHTS, arrCeiling = DEFAULT_ARR_CEILING) {
   const base =
     normArr(req.arr, arrCeiling)  * weights.arr +
-    normPriority(req.sfPriority)  * weights.priority +
+    normPriority(req.priority)  * weights.priority +
     normDeadline(req)             * weights.deadlineProximity +
     normWorkEst(req.workEstimate) * weights.workEstimate;
   return base * (req.escalationMultiplier ?? 1.0);

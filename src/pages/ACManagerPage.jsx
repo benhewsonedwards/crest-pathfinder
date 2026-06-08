@@ -171,8 +171,8 @@ function RequestRow({ req, rank, milestones, weights, arrCeiling, onClick, tab }
 
       {/* Priority */}
       <div style={{ width: 80, flexShrink: 0, marginRight: 12 }}>
-        <Pill color={PRIORITY_COLOURS[req.sfPriority] || "grey"} style={{ fontSize: 10 }}>
-          {req.sfPriority || "—"}
+        <Pill color={PRIORITY_COLOURS[req.priority] || "grey"} style={{ fontSize: 10 }}>
+          {req.priority || "—"}
         </Pill>
       </div>
 
@@ -314,7 +314,7 @@ export default function ACManagerPage() {
       if (hasAction) return false;
     }
     if (flagFilter === "escalated" && (r.escalationMultiplier ?? 1) === 1) return false;
-    if (flagFilter === "critical" && r.sfPriority !== "Critical") return false;
+    if (flagFilter === "critical" && r.priority !== "Critical") return false;
     return true;
   });
   const sorted = [...filtered].sort((a, b) =>
@@ -323,7 +323,7 @@ export default function ACManagerPage() {
 
   // Stats for header
   const total    = requests.length;
-  const critical = requests.filter(r => r.sfPriority === "Critical").length;
+  const critical = requests.filter(r => r.priority === "Critical").length;
   const noAction = requests.filter(r => {
     const ms = milestoneMap[r.id] || [];
     return !ms.some(m => !m.completed && (m.date?.toDate ? m.date.toDate() : new Date(m.date)) > new Date());

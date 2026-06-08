@@ -6,11 +6,11 @@ import { Card, Btn, Label, Pill } from "../components/UI";
 
 // ─── Sample requests for the live preview ─────────────────────────────────────
 const PREVIEW_REQUESTS = [
-  { id: "p1", accountName: "Network Rail",      sfPriority: "Critical", arr: 420000, workEstimate: "high",   deadlineType: "hard", preferredCompletion: { toDate: () => new Date(Date.now() + 14 * 86400000) }, escalationMultiplier: 1.5 },
-  { id: "p2", accountName: "Altrad",            sfPriority: "High",     arr: 185000, workEstimate: "high",   deadlineType: "hard", preferredCompletion: { toDate: () => new Date(Date.now() + 28 * 86400000) }, escalationMultiplier: 1.0 },
-  { id: "p3", accountName: "Schneider Electric",sfPriority: "Medium",   arr: 310000, workEstimate: "medium", deadlineType: "soft", preferredCompletion: { toDate: () => new Date(Date.now() + 45 * 86400000) }, escalationMultiplier: 1.0 },
-  { id: "p4", accountName: "Prysmian Group",    sfPriority: "Medium",   arr: 95000,  workEstimate: "medium", deadlineType: null,   preferredCompletion: null, escalationMultiplier: 1.0 },
-  { id: "p5", accountName: "OVO Energy",        sfPriority: "Low",      arr: 68000,  workEstimate: "low",    deadlineType: "soft", preferredCompletion: { toDate: () => new Date(Date.now() + 90 * 86400000) }, escalationMultiplier: 1.0 },
+  { id: "p1", accountName: "Network Rail",      priority: "Critical", arr: 420000, workEstimate: "high",   deadlineType: "hard", preferredCompletion: { toDate: () => new Date(Date.now() + 14 * 86400000) }, escalationMultiplier: 1.5 },
+  { id: "p2", accountName: "Altrad",            priority: "High",     arr: 185000, workEstimate: "high",   deadlineType: "hard", preferredCompletion: { toDate: () => new Date(Date.now() + 28 * 86400000) }, escalationMultiplier: 1.0 },
+  { id: "p3", accountName: "Schneider Electric",priority: "Medium",   arr: 310000, workEstimate: "medium", deadlineType: "soft", preferredCompletion: { toDate: () => new Date(Date.now() + 45 * 86400000) }, escalationMultiplier: 1.0 },
+  { id: "p4", accountName: "Prysmian Group",    priority: "Medium",   arr: 95000,  workEstimate: "medium", deadlineType: null,   preferredCompletion: null, escalationMultiplier: 1.0 },
+  { id: "p5", accountName: "OVO Energy",        priority: "Low",      arr: 68000,  workEstimate: "low",    deadlineType: "soft", preferredCompletion: { toDate: () => new Date(Date.now() + 90 * 86400000) }, escalationMultiplier: 1.0 },
 ];
 
 // ─── Weight slider ─────────────────────────────────────────────────────────────
@@ -58,7 +58,7 @@ function PreviewTable({ weights, arrCeiling, prevWeights, prevArrCeiling }) {
   function scoreWith(w, ceiling) {
     return PREVIEW_REQUESTS.map(r => {
       const normArr = Math.min((r.arr || 0) / ceiling, 1);
-      const normPriority = { Critical: 1.0, High: 0.75, Medium: 0.5, Low: 0.25 }[r.sfPriority] ?? 0;
+      const normPriority = { Critical: 1.0, High: 0.75, Medium: 0.5, Low: 0.25 }[r.priority] ?? 0;
       const normWork = { high: 1.0, medium: 0.5, low: 0.25 }[r.workEstimate] ?? 0;
       let normDeadline = 0;
       if (r.preferredCompletion) {

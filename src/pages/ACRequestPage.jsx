@@ -427,14 +427,14 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
 
   // Deliverables summary — editable sticky note
   const [deliverables, setDeliverables] = useState(req.deliverablesSummary || "");
-  const [priority, setPriority] = useState(req.sfPriority || "");
+  const [priority, setPriority] = useState(req.priority || "");
   const [deliverablesSaving, setDeliverablesSaving] = useState(false);
   const [deliverablesTimer, setDeliverablesTimer] = useState(null);
 
   // Auto-save deliverables after 1.5s of no typing
   useEffect(() => {
     setDeliverables(req.deliverablesSummary || "");
-    setPriority(req.sfPriority || "");
+    setPriority(req.priority || "");
   }, [req.id]);
 
   function handleDeliverablesChange(val) {
@@ -459,7 +459,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
     setPriority(val);
     try {
       await updateDoc(doc(db, "acRequests", req.id), {
-        sfPriority: val,
+        priority: val,
         lastUpdatedBy: user?.email || "unknown",
         lastUpdatedAt: serverTimestamp(),
       });
