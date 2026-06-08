@@ -59,7 +59,7 @@ function PreviewTable({ weights, arrCeiling, prevWeights, prevArrCeiling }) {
     return PREVIEW_REQUESTS.map(r => {
       const normArr = Math.min((r.arr || 0) / ceiling, 1);
       const normPriority = { Critical: 1.0, High: 0.75, Medium: 0.5, Low: 0.25 }[r.priority] ?? 0;
-      const normWork = { high: 1.0, medium: 0.5, low: 0.25 }[r.workEstimate] ?? 0;
+      const normWork = { "Low": 1.0, "Medium": 0.75, "High": 0.5, "Very High": 0.25, low: 1.0, medium: 0.75, high: 0.5 }[r.workEstimate] ?? 0;
       let normDeadline = 0;
       if (r.preferredCompletion) {
         const d = r.preferredCompletion.toDate ? r.preferredCompletion.toDate() : new Date(r.preferredCompletion);

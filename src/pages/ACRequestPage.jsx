@@ -491,6 +491,148 @@ function EscalationPanel({ req }) {
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 
+
+// ─── Escalation pill picker ───────────────────────────────────────────────────
+
+function EscalationPill({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const [note, setNote] = useState("");
+  const btnRef = React.useRef(null);
+  const current = value ?? 1.0;
+
+  function handleOpen() {
+    if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setNote("");
+    setOpen(o => !o);
+  }
+
+  const label = current === 0.5 ? "0.5× low" : current === 1.5 ? "1.5× high" : "1.0× normal";
+  const colour = current === 1.5 ? { bg: "var(--red-light)", text: "var(--red)" }
+               : current === 0.5 ? { bg: "var(--slate-light)", text: "var(--slate)" }
+               : { bg: "var(--surface2)", text: "var(--text-muted)" };
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button ref={btnRef} onClick={handleOpen} style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+        cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+        background: colour.bg, color: colour.text,
+        border: `1px solid ${colour.text}40`, transition: "opacity 0.13s",
+      }}>
+        {label} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+      </button>
+      {open && rect && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+          <div style={{
+            position: "fixed", top: rect.bottom + 4, left: rect.left, zIndex: 100,
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)",
+            minWidth: 180, padding: 12,
+          }}>
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              {[0.5, 1.0, 1.5].map(v => (
+                <button key={v} onClick={() => onChange(v, note)} style={{
+                  flex: 1, padding: "6px 0", borderRadius: "var(--radius-sm)", cursor: "pointer",
+                  border: `2px solid ${current === v ? "var(--purple)" : "var(--border)"}`,
+                  background: current === v ? "var(--purple-light)" : "var(--surface)",
+                  color: current === v ? "var(--purple)" : "var(--text-second)",
+                  fontFamily: "inherit", fontSize: 12, fontWeight: 600,
+                }}>
+                  {v === 0.5 ? "0.5×" : v === 1.0 ? "1.0×" : "1.5×"}
+                </button>
+              ))}
+            </div>
+            <input
+              value={note} onChange={e => setNote(e.target.value)}
+              placeholder="Reason (optional)"
+              style={{
+                width: "100%", padding: "6px 10px", fontSize: 12,
+                border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+                background: "var(--surface)", color: "var(--text-primary)",
+                fontFamily: "inherit", outline: "none",
+              }}
+            />
+            <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
+              Click a multiplier above to save
+            </p>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+// ─── Effort picker ────────────────────────────────────────────────────────────
+
+const EFFORT_OPTIONS = ["Low", "Medium", "High", "Very High"];
+const EFFORT_COLOURS = {
+  "Low":       { bg: "var(--green-light)",  text: "var(--green)"  },
+  "Medium":    { bg: "var(--blue-light)",   text: "var(--blue)"   },
+  "High":      { bg: "var(--amber-light)",  text: "var(--amber)"  },
+  "Very High": { bg: "var(--red-light)",    text: "var(--red)"    },
+};
+
+function EffortPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const btnRef = React.useRef(null);
+  const col = EFFORT_COLOURS[value];
+
+  function handleOpen() {
+    if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen(o => !o);
+  }
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button ref={btnRef} onClick={handleOpen} style={{
+        display: "inline-flex", alignItems: "center", gap: 4,
+        padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600,
+        cursor: "pointer", whiteSpace: "nowrap", fontFamily: "inherit",
+        background: col ? col.bg : "var(--surface2)",
+        color: col ? col.text : "var(--text-muted)",
+        border: `1px solid ${col ? col.text + "40" : "var(--border)"}`,
+      }}>
+        {value || "— set —"} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+      </button>
+      {open && rect && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+          <div style={{
+            position: "fixed", top: rect.bottom + 4, left: rect.left, zIndex: 100,
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)",
+            minWidth: 120, overflow: "hidden",
+          }}>
+            {EFFORT_OPTIONS.map(p => {
+              const c = EFFORT_COLOURS[p];
+              return (
+                <button key={p} onClick={() => { onChange(p); setOpen(false); }} style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  width: "100%", padding: "8px 12px", background: value === p ? c.bg : "transparent",
+                  border: "none", cursor: "pointer", fontFamily: "inherit",
+                  fontSize: 12, fontWeight: value === p ? 700 : 400,
+                  color: value === p ? c.text : "var(--text-second)", textAlign: "left",
+                }}
+                onMouseEnter={e => { if (value !== p) e.currentTarget.style.background = "var(--surface2)"; }}
+                onMouseLeave={e => { if (value !== p) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.text, flexShrink: 0 }} />
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Priority picker ──────────────────────────────────────────────────────────
 
 const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
@@ -575,6 +717,8 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
   // Deliverables summary — editable sticky note
   const [deliverables, setDeliverables] = useState(req.deliverablesSummary || "");
   const [priority, setPriority] = useState(req.priority || "");
+  const [effort, setEffort] = useState(req.workEstimate || "");
+  const [escalation, setEscalation] = useState(req.escalationMultiplier ?? 1.0);
   const [deliverablesSaving, setDeliverablesSaving] = useState(false);
   const [deliverablesTimer, setDeliverablesTimer] = useState(null);
 
@@ -582,6 +726,8 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
   useEffect(() => {
     setDeliverables(req.deliverablesSummary || "");
     setPriority(req.priority || "");
+    setEffort(req.workEstimate || "");
+    setEscalation(req.escalationMultiplier ?? 1.0);
   }, [req.id]);
 
   function handleDeliverablesChange(val) {
@@ -600,6 +746,29 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
       }
     }, 1500);
     setDeliverablesTimer(t);
+  }
+
+  async function handleEffortChange(val) {
+    setEffort(val);
+    try {
+      await updateDoc(doc(db, "acRequests", req.id), {
+        workEstimate: val,
+        lastUpdatedBy: user?.email || "unknown",
+        lastUpdatedAt: serverTimestamp(),
+      });
+    } catch (e) { toast("Failed to update effort", "error"); }
+  }
+
+  async function handleEscalationChange(val, note) {
+    setEscalation(val);
+    try {
+      await updateDoc(doc(db, "acRequests", req.id), {
+        escalationMultiplier: val,
+        escalationNote: note?.trim() || req.escalationNote || null,
+        escalationSetBy: user?.displayName || user?.email || "unknown",
+        escalationSetAt: serverTimestamp(),
+      });
+    } catch (e) { toast("Failed to update escalation", "error"); }
   }
 
   async function handlePriorityChange(val) {
@@ -718,54 +887,92 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
         </div>
       </div>
 
-      {/* Stat strip */}
+      {/* Row 1 — SF data */}
       <div style={{
         display: "flex", gap: 0, flexWrap: "wrap",
         background: "var(--surface)", border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)", overflow: "visible",
-        marginBottom: 20, boxShadow: "var(--shadow-sm)",
+        marginBottom: 10, boxShadow: "var(--shadow-sm)",
       }}>
         {[
-          { label: "ARR",       value: fmtARR(req.arr) },
-          { label: "Priority",  value: priority || "—", pill: PRIORITY_COLOURS[priority], editable: true },
-          { label: "Assigned",  value: req.assignedTo || "Unassigned", avatar: req.assignedTo },
-          { label: "Status",    value: req.sfStatus || "—", pill: STATUS_COLOURS[req.sfStatus] },
-          { label: "Score",     value: Math.round(score * 100), scoreColour: score * 100 >= 70 ? "var(--red)" : score * 100 >= 40 ? "var(--amber)" : "var(--green)" },
-          { label: "Age",       value: fmtAge(req.createdAt) },
-          { label: "Next meeting", value: nextMeeting ? fmtShortDate(nextMeeting.date) : "—" },
-          { label: "Deadline",  value: nextDeadline ? fmtShortDate(nextDeadline.date) : "—",
-            warn: nextDeadline && (() => { const d = nextDeadline.date?.toDate ? nextDeadline.date.toDate() : new Date(nextDeadline.date); return (d - Date.now()) < 7 * 86400000; })() },
+          { label: "ARR",      value: fmtARR(req.arr) },
+          { label: "Status",   value: req.sfStatus || "—", pill: STATUS_COLOURS[req.sfStatus] },
+          { label: "Assigned", value: req.assignedTo || "Unassigned", avatar: req.assignedTo },
+          { label: "Created",  value: fmtDate(req.createdAt) },
+          { label: "Age",      value: fmtAge(req.createdAt) },
         ].map((s, i, arr) => (
           <div key={s.label} style={{
             padding: "12px 16px", flex: 1, minWidth: 80,
             borderRight: i < arr.length - 1 ? "1px solid var(--border)" : "none",
           }}>
-            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 4 }}>
-              {s.label}
-            </p>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>{s.label}</p>
             {s.avatar ? (
               <div style={{ display: "flex", alignItems: "center", gap: 5, overflow: "hidden" }}>
                 <Avatar name={s.avatar} size={18} />
                 <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.avatar.split(" ")[0]}</span>
               </div>
-            ) : s.pill && s.editable ? (
-              <div style={{ position: "relative" }}>
-                <PriorityPicker value={priority} onChange={handlePriorityChange} />
-              </div>
             ) : s.pill ? (
               <Pill color={s.pill} style={{ fontSize: 11 }}>{s.value}</Pill>
             ) : (
-              <p style={{
-                fontSize: 13, fontWeight: 600,
-                color: s.scoreColour || (s.warn ? "var(--red)" : "var(--text-primary)"),
-              }}>
-                {s.value}
-              </p>
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{s.value}</p>
             )}
           </div>
         ))}
       </div>
 
+      {/* Row 2 — AC Manager data */}
+      <div style={{
+        display: "flex", gap: 0, flexWrap: "wrap", alignItems: "stretch",
+        background: "var(--surface)", border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)", overflow: "visible",
+        marginBottom: 20, boxShadow: "var(--shadow-sm)",
+      }}>
+        {/* Next meeting */}
+        <div style={{ padding: "12px 16px", flex: 1, minWidth: 80, borderRight: "1px solid var(--border)" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Next meeting</p>
+          <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{nextMeeting ? fmtShortDate(nextMeeting.date) : "—"}</p>
+        </div>
+        {/* Deadline */}
+        <div style={{ padding: "12px 16px", flex: 1, minWidth: 80, borderRight: "1px solid var(--border)" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Deadline</p>
+          {(() => { const du = nextDeadline ? Math.ceil(((nextDeadline.date?.toDate ? nextDeadline.date.toDate() : new Date(nextDeadline.date)) - Date.now()) / 86400000) : null;
+            return <p style={{ fontSize: 13, fontWeight: 600, color: du !== null && du <= 7 ? "var(--red)" : "var(--text-primary)" }}>{nextDeadline ? fmtShortDate(nextDeadline.date) : "—"}</p>;
+          })()}
+        </div>
+        {/* Priority */}
+        <div style={{ padding: "12px 16px", flex: 1, minWidth: 80, borderRight: "1px solid var(--border)" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Priority</p>
+          <PriorityPicker value={priority} onChange={handlePriorityChange} />
+        </div>
+        {/* Effort */}
+        <div style={{ padding: "12px 16px", flex: 1, minWidth: 80, borderRight: "1px solid var(--border)" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Effort</p>
+          <EffortPicker value={effort} onChange={handleEffortChange} />
+        </div>
+        {/* Escalation */}
+        <div style={{ padding: "12px 16px", flex: 1, minWidth: 100, borderRight: "1px solid var(--border)" }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Escalation</p>
+          <EscalationPill value={escalation} onChange={handleEscalationChange} />
+          {req.escalationSetBy && <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 3 }}>{req.escalationSetBy}</p>}
+        </div>
+        {/* Score */}
+        <div style={{ padding: "12px 16px", flex: 1, minWidth: 70 }}>
+          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Score</p>
+          <p style={{ fontFamily: "Poppins, sans-serif", fontSize: 18, fontWeight: 700, color: score * 100 >= 70 ? "var(--red)" : score * 100 >= 40 ? "var(--amber)" : "var(--green)" }}>
+            {Math.round(score * 100)}
+          </p>
+        </div>
+      </div>
+
+      {/* Request description */}
+      {req.description && (
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>Request description</p>
+          <p style={{ fontSize: 13, color: "var(--text-second)", lineHeight: 1.7, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--radius-lg)", padding: "12px 16px" }}>{req.description}</p>
+        </div>
+      )}
+
+      {/* Deliverables summary */}
       {/* Deliverables summary */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
@@ -795,44 +1002,6 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
         <AddMilestoneForm reqId={req.id} />
       </div>
 
-      {/* Two-col bottom section */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-
-        {/* SF read-only */}
-        <div style={{
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "var(--radius-lg)", padding: "18px 20px",
-          boxShadow: "var(--shadow-sm)",
-        }}>
-          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 14 }}>
-            Salesforce fields
-          </p>
-          {[
-            { label: "SF Name",    value: req.sfName },
-            { label: "Status",     value: req.sfStatus },
-            { label: "ARR",        value: fmtARR(req.arr) },
-            { label: "Completion", value: fmtDate(req.preferredCompletion) },
-            { label: "Opened",     value: fmtDate(req.createdAt) },
-            { label: "Assigned",   value: req.assignedTo || "Unassigned" },
-          ].map(f => (
-            <div key={f.label} style={{ display: "flex", gap: 8, padding: "5px 0", borderBottom: "1px solid var(--border)" }}>
-              <span style={{ fontSize: 12, color: "var(--text-muted)", width: 90, flexShrink: 0 }}>{f.label}</span>
-              <span style={{ fontSize: 12, color: "var(--text-second)" }}>{f.value || "—"}</span>
-            </div>
-          ))}
-          {req.description && (
-            <p style={{ fontSize: 12, color: "var(--text-second)", marginTop: 10, lineHeight: 1.6 }}>{req.description}</p>
-          )}
-        </div>
-
-        {/* Escalation */}
-        <div>
-          <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 600, fontSize: 14, marginBottom: 14 }}>
-            Priority adjustment
-          </p>
-          <EscalationPanel req={req} />
-        </div>
-      </div>
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>

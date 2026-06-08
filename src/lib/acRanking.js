@@ -6,7 +6,7 @@ export const DEFAULT_ARR_CEILING = 500000;
 
 function normArr(arr, ceiling = 500000) { return Math.min((arr || 0) / ceiling, 1); }
 function normPriority(p) { return { Critical: 1.0, High: 0.75, Medium: 0.5, Low: 0.25 }[p] ?? 0; }
-function normWorkEst(w)  { return { high: 1.0, medium: 0.5, low: 0.25 }[w] ?? 0; }
+function normWorkEst(w)  { return { "Low": 1.0, "Medium": 0.75, "High": 0.5, "Very High": 0.25, low: 1.0, medium: 0.75, high: 0.5 }[w] ?? 0; }
 
 function normDeadline(req) {
   const d = req.preferredCompletion;
