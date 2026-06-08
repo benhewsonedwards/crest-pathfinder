@@ -208,8 +208,121 @@ function MilestoneTimeline({ milestones, onToggle }) {
 
 // ─── Milestone list (below timeline) ─────────────────────────────────────────
 
-function MilestoneList({ milestones, onToggle, onDelete }) {
+function MilestoneRow({ m, onToggle, onDelete, onSave }) {
   const now = Date.now();
+  const [editing, setEditing] = useState(false);
+  const [editType, setEditType] = useState(m.type);
+  const [editDate, setEditDate] = useState(toInputDate(m.date));
+  const [editNote, setEditNote] = useState(m.note || "");
+  const [editDeadlineType, setEditDeadlineType] = useState(m.deadlineType || "hard");
+  const [saving, setSaving] = useState(false);
+  const d = m.date?.toDate ? m.date.toDate() : new Date(m.date || 0);
+  const isOverdue = !m.completed && d.getTime() < now;
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await onSave(m.id, {
+        type: editType,
+        date: fromInputDate(editDate),
+        note: editNote.trim() || null,
+        isDeadline: editType === "Deadline",
+        deadlineType: editType === "Deadline" ? editDeadlineType : null,
+      });
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <div style={{ width: 16, flexShrink: 0, marginTop: 6 }} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 140px", gap: 8 }}>
+            <Select value={editType} onChange={e => setEditType(e.target.value)}>
+              {MILESTONE_TYPES.map(t => <option key={t}>{t}</option>)}
+            </Select>
+            <Input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} />
+          </div>
+          {editType === "Deadline" && (
+            <Select value={editDeadlineType} onChange={e => setEditDeadlineType(e.target.value)}>
+              <option value="hard">Hard deadline</option>
+              <option value="soft">Soft deadline</option>
+            </Select>
+          )}
+          <Input value={editNote} onChange={e => setEditNote(e.target.value)} placeholder="Note (optional)" />
+          <div style={{ display: "flex", gap: 8 }}>
+            <Btn variant="primary" size="sm" onClick={handleSave} disabled={saving || !editDate}>
+              {saving ? "Saving…" : "Save"}
+            </Btn>
+            <Btn variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Btn>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      display: "flex", gap: 10, padding: "8px 0",
+      borderBottom: "1px solid var(--border)",
+      opacity: m.completed ? 0.5 : 1,
+      alignItems: "flex-start",
+    }}>
+      <button
+        onClick={() => onToggle(m.id, !m.completed)}
+        style={{
+          width: 16, height: 16, borderRadius: 4, flexShrink: 0, marginTop: 2,
+          border: `2px solid ${m.completed ? "var(--green)" : isOverdue ? "var(--red)" : "var(--border2)"}`,
+          background: m.completed ? "var(--green)" : "transparent",
+          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+        }}
+      >
+        {m.completed && <span style={{ color: "white", fontSize: 10 }}>✓</span>}
+      </button>
+      <div style={{ flex: 1, cursor: "pointer" }} onClick={() => setEditing(true)}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13 }}>{MILESTONE_ICONS[m.type] || "•"}</span>
+          <span style={{
+            fontSize: 13, fontWeight: 500,
+            color: m.completed ? "var(--text-muted)" : "var(--text-primary)",
+            textDecoration: m.completed ? "line-through" : "none",
+          }}>
+            {m.type}
+          </span>
+          {m.isDeadline && m.deadlineType && (
+            <Pill color={m.deadlineType === "hard" ? "red" : "amber"} style={{ fontSize: 9 }}>
+              {m.deadlineType}
+            </Pill>
+          )}
+          {isOverdue && <Pill color="red" style={{ fontSize: 9 }}>overdue</Pill>}
+          <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
+            {fmtDate(m.date)}
+          </span>
+        </div>
+        {m.note && (
+          <p style={{ fontSize: 12, color: "var(--text-second)", marginTop: 3, lineHeight: 1.5 }}>{m.note}</p>
+        )}
+        {!m.note && <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2, fontStyle: "italic" }}>click to edit</p>}
+      </div>
+      <button
+        onClick={() => onDelete(m.id)}
+        title="Delete milestone"
+        style={{
+          background: "none", border: "none", cursor: "pointer",
+          color: "var(--text-muted)", fontSize: 14, padding: "2px 4px",
+          flexShrink: 0, lineHeight: 1, borderRadius: 4,
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
+        onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
+      >✕</button>
+    </div>
+  );
+}
+
+function MilestoneList({ milestones, onToggle, onDelete, onSave }) {
   const sorted = [...milestones].sort((a, b) => {
     const da = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
     const db_ = b.date?.toDate ? b.date.toDate() : new Date(b.date || 0);
@@ -218,65 +331,9 @@ function MilestoneList({ milestones, onToggle, onDelete }) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      {sorted.map(m => {
-        const d = m.date?.toDate ? m.date.toDate() : new Date(m.date || 0);
-        const isOverdue = !m.completed && d.getTime() < now;
-        return (
-          <div key={m.id} style={{
-            display: "flex", gap: 10, padding: "8px 0",
-            borderBottom: "1px solid var(--border)",
-            opacity: m.completed ? 0.5 : 1,
-            alignItems: "flex-start",
-          }}>
-            <button
-              onClick={() => onToggle(m.id, !m.completed)}
-              style={{
-                width: 16, height: 16, borderRadius: 4, flexShrink: 0, marginTop: 2,
-                border: `2px solid ${m.completed ? "var(--green)" : isOverdue ? "var(--red)" : "var(--border2)"}`,
-                background: m.completed ? "var(--green)" : "transparent",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-              }}
-            >
-              {m.completed && <span style={{ color: "white", fontSize: 10 }}>✓</span>}
-            </button>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                <span style={{ fontSize: 13 }}>{MILESTONE_ICONS[m.type] || "•"}</span>
-                <span style={{
-                  fontSize: 13, fontWeight: 500,
-                  color: m.completed ? "var(--text-muted)" : "var(--text-primary)",
-                  textDecoration: m.completed ? "line-through" : "none",
-                }}>
-                  {m.type}
-                </span>
-                {m.isDeadline && m.deadlineType && (
-                  <Pill color={m.deadlineType === "hard" ? "red" : "amber"} style={{ fontSize: 9 }}>
-                    {m.deadlineType}
-                  </Pill>
-                )}
-                {isOverdue && <Pill color="red" style={{ fontSize: 9 }}>overdue</Pill>}
-                <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: "auto" }}>
-                  {fmtDate(m.date)}
-                </span>
-              </div>
-              {m.note && (
-                <p style={{ fontSize: 12, color: "var(--text-second)", marginTop: 3, lineHeight: 1.5 }}>{m.note}</p>
-              )}
-            </div>
-            <button
-              onClick={() => onDelete(m.id)}
-              title="Delete milestone"
-              style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: "var(--text-muted)", fontSize: 14, padding: "2px 4px",
-                flexShrink: 0, lineHeight: 1, borderRadius: 4,
-              }}
-              onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
-              onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
-            >✕</button>
-          </div>
-        );
-      })}
+      {sorted.map(m => (
+        <MilestoneRow key={m.id} m={m} onToggle={onToggle} onDelete={onDelete} onSave={onSave} />
+      ))}
     </div>
   );
 }
@@ -558,6 +615,10 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
     }
   }
 
+  async function handleSaveMilestone(milestoneId, updates) {
+    await updateDoc(doc(db, "acRequests", req.id, "milestones", milestoneId), updates);
+  }
+
   async function handleDeleteMilestone(milestoneId) {
     try {
       await deleteDoc(doc(db, "acRequests", req.id, "milestones", milestoneId));
@@ -730,7 +791,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
           Milestone timeline
         </p>
         <MilestoneTimeline milestones={milestones} onToggle={handleToggleMilestone} />
-        <MilestoneList milestones={milestones} onToggle={handleToggleMilestone} onDelete={handleDeleteMilestone} />
+        <MilestoneList milestones={milestones} onToggle={handleToggleMilestone} onDelete={handleDeleteMilestone} onSave={handleSaveMilestone} />
         <AddMilestoneForm reqId={req.id} />
       </div>
 
