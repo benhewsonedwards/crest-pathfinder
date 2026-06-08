@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  collection, onSnapshot, addDoc, updateDoc, doc,
+  collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc,
   serverTimestamp, Timestamp,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -208,7 +208,7 @@ function MilestoneTimeline({ milestones, onToggle }) {
 
 // ─── Milestone list (below timeline) ─────────────────────────────────────────
 
-function MilestoneList({ milestones, onToggle }) {
+function MilestoneList({ milestones, onToggle, onDelete }) {
   const now = Date.now();
   const sorted = [...milestones].sort((a, b) => {
     const da = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
@@ -226,6 +226,7 @@ function MilestoneList({ milestones, onToggle }) {
             display: "flex", gap: 10, padding: "8px 0",
             borderBottom: "1px solid var(--border)",
             opacity: m.completed ? 0.5 : 1,
+            alignItems: "flex-start",
           }}>
             <button
               onClick={() => onToggle(m.id, !m.completed)}
@@ -262,6 +263,17 @@ function MilestoneList({ milestones, onToggle }) {
                 <p style={{ fontSize: 12, color: "var(--text-second)", marginTop: 3, lineHeight: 1.5 }}>{m.note}</p>
               )}
             </div>
+            <button
+              onClick={() => onDelete(m.id)}
+              title="Delete milestone"
+              style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: "var(--text-muted)", fontSize: 14, padding: "2px 4px",
+                flexShrink: 0, lineHeight: 1, borderRadius: 4,
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--red)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}
+            >✕</button>
           </div>
         );
       })}
@@ -546,6 +558,14 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
     }
   }
 
+  async function handleDeleteMilestone(milestoneId) {
+    try {
+      await deleteDoc(doc(db, "acRequests", req.id, "milestones", milestoneId));
+    } catch (e) {
+      toast("Failed to delete milestone", "error");
+    }
+  }
+
   async function handleToggleMilestone(milestoneId, completed) {
     try {
       await updateDoc(doc(db, "acRequests", req.id, "milestones", milestoneId), { completed });
@@ -710,7 +730,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
           Milestone timeline
         </p>
         <MilestoneTimeline milestones={milestones} onToggle={handleToggleMilestone} />
-        <MilestoneList milestones={milestones} onToggle={handleToggleMilestone} />
+        <MilestoneList milestones={milestones} onToggle={handleToggleMilestone} onDelete={handleDeleteMilestone} />
         <AddMilestoneForm reqId={req.id} />
       </div>
 
