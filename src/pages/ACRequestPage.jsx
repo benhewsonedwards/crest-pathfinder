@@ -480,6 +480,14 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
   );
   const nextDeadline = futureMilestones.find(m => m.isDeadline || m.type === "Deadline");
 
+  // Derive flags
+  const hasNoNextAction = futureMilestones.length === 0;
+  const isOverdueFlag = milestones.some(m => {
+    if (m.completed) return false;
+    const d = m.date?.toDate ? m.date.toDate() : new Date(m.date || 0);
+    return d < now;
+  });
+
   return (
     <div style={{ padding: "24px 28px 64px", maxWidth: 860, margin: "0 auto" }}>
       <ToastContainer toasts={toasts} />
@@ -510,6 +518,12 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
             <Pill color={(req.escalationMultiplier ?? 1) > 1 ? "red" : "grey"}>
               {(req.escalationMultiplier ?? 1) > 1 ? "↑ Escalated" : "↓ De-prioritised"}
             </Pill>
+          )}
+          {isOverdueFlag && (
+            <Pill color="red">🔴 Overdue milestone</Pill>
+          )}
+          {hasNoNextAction && (
+            <Pill color="amber">🟡 No next action</Pill>
           )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>

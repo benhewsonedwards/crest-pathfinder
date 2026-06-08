@@ -257,6 +257,7 @@ export default function ACManagerPage() {
   const [loadingReqs, setLoadingReqs] = useState(true);
   const [assignedFilter, setAssignedFilter] = useState("all");
   const [arrCeiling, setArrCeiling] = useState(DEFAULT_ARR_CEILING);
+  const [flagFilter, setFlagFilter] = useState(null); // null | 'noaction' | 'escalated' | 'critical'
 
   // Live subscribe to acRequests
   useEffect(() => {
@@ -307,6 +308,13 @@ export default function ACManagerPage() {
   const filtered = requests.filter(r => {
     if (tab !== "all" && r.requestType !== tab) return false;
     if (assignedFilter !== "all" && r.assignedTo !== assignedFilter) return false;
+    if (flagFilter === "noaction") {
+      const ms = milestoneMap[r.id] || [];
+      const hasAction = ms.some(m => !m.completed && (m.date?.toDate ? m.date.toDate() : new Date(m.date)) > new Date());
+      if (hasAction) return false;
+    }
+    if (flagFilter === "escalated" && (r.escalationMultiplier ?? 1) === 1) return false;
+    if (flagFilter === "critical" && r.sfPriority !== "Critical") return false;
     return true;
   });
   const sorted = [...filtered].sort((a, b) =>
@@ -352,27 +360,35 @@ export default function ACManagerPage() {
         </p>
       </div>
 
-      {/* Stat cards */}
+      {/* Stat cards — clickable to filter */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 20 }}>
         {[
-          { label: "Total requests", value: total,    colour: "var(--purple)" },
-          { label: "Critical",       value: critical, colour: "var(--red)"    },
-          { label: "No next action", value: noAction, colour: "var(--amber)"  },
-          { label: "Escalated",      value: escalated,colour: "var(--blue)"   },
-        ].map(s => (
-          <div key={s.label} style={{
-            background: "var(--surface)", border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)", padding: "14px 18px",
-            boxShadow: "var(--shadow-sm)",
-          }}>
-            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 6 }}>
-              {s.label}
-            </p>
-            <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 26, color: s.colour }}>
-              {s.value}
-            </p>
-          </div>
-        ))}
+          { label: "Total requests", value: total,    colour: "var(--purple)", filter: null },
+          { label: "Critical",       value: critical, colour: "var(--red)",    filter: "critical" },
+          { label: "No next action", value: noAction, colour: "var(--amber)",  filter: "noaction" },
+          { label: "Escalated",      value: escalated,colour: "var(--blue)",   filter: "escalated" },
+        ].map(s => {
+          const active = flagFilter === s.filter;
+          return (
+            <div key={s.label}
+              onClick={() => setFlagFilter(active ? null : s.filter)}
+              style={{
+                background: active ? s.colour + "12" : "var(--surface)",
+                border: `1px solid ${active ? s.colour : "var(--border)"}`,
+                borderRadius: "var(--radius-lg)", padding: "14px 18px",
+                boxShadow: "var(--shadow-sm)", cursor: s.filter ? "pointer" : "default",
+                transition: "all 0.15s",
+              }}
+            >
+              <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.07em", textTransform: "uppercase", color: active ? s.colour : "var(--text-muted)", marginBottom: 6 }}>
+                {s.label}{active ? " ×" : ""}
+              </p>
+              <p style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 26, color: s.colour }}>
+                {s.value}
+              </p>
+            </div>
+          );
+        })}
       </div>
 
       {/* Tab bar */}
