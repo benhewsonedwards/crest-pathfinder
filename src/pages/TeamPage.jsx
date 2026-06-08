@@ -31,20 +31,44 @@ const ORG = [
 
 const ROLE_COLOUR = { cse: "purple", com: "blue", im: "teal", csm: "green", ae: "amber", ta: "purple", manager: "grey" };
 const ROLE_LABEL  = { cse: "CSE", com: "COM", im: "IM", csm: "CSM", ae: "AE", ta: "TA", manager: "Manager" };
-const APP_ROLE_COLOUR = { super_admin: "red", admin: "orange", cse: "purple", csm: "teal", com: "blue", ae: "amber", viewer: "grey" };
+const APP_ROLE_COLOUR = { super_admin: "red", admin: "orange", crest_user: "purple", ac_user: "blue", cse: "purple", csm: "teal", com: "blue", ae: "amber", viewer: "grey" };
 
 function RolePill({ roleKey }) {
   return <Pill color={ROLE_COLOUR[roleKey] || "grey"} style={{ fontSize: 10 }}>{ROLE_LABEL[roleKey] || roleKey}</Pill>;
 }
+function tierLabel(role) {
+  if (!role) return "no access";
+  if (["super_admin","admin"].includes(role)) return "admin";
+  if (["crest_user","cse","com","csm","manager"].includes(role)) return "crest user";
+  if (["ac_user","ae","ta","viewer"].includes(role)) return "ac user";
+  return role.replace("_"," ");
+}
+function tierColour(role) {
+  if (!role) return "grey";
+  if (["super_admin","admin"].includes(role)) return "orange";
+  if (["crest_user","cse","com","csm","manager"].includes(role)) return "purple";
+  return "blue";
+}
 function AppRolePill({ role }) {
-  return <Pill color={APP_ROLE_COLOUR[role] || "grey"} style={{ fontSize: 10 }}>{role?.replace("_", " ")}</Pill>;
+  return <Pill color={tierColour(role)} style={{ fontSize: 10 }}>{tierLabel(role)}</Pill>;
 }
 
-function PersonRow({ person, fbUser, isAdmin, onEdit, teamColour, showTeam, onFilterByPerson }) {
+function PersonRow({ person, fbUser, isAdmin, teamColour, showTeam }) {
+  const [saving, setSaving] = useState(false);
   const initials = person.initials || person.name.split(" ").map(n => n[0]).join("").slice(0, 2);
   const cols = showTeam
-    ? "36px 1fr 100px 80px 100px 120px 80px"
-    : "36px 1fr 80px 100px 120px 80px";
+    ? "36px 1fr 100px 80px 100px 160px"
+    : "36px 1fr 80px 100px 160px";
+
+  async function handleRoleChange(newRole) {
+    if (!fbUser?.uid) return;
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, "users", fbUser.uid), { role: newRole });
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div style={{
@@ -76,22 +100,33 @@ function PersonRow({ person, fbUser, isAdmin, onEdit, teamColour, showTeam, onFi
       {showTeam && <span style={{ fontSize: 11, color: "var(--text-second)" }}>{person.team}</span>}
       <span style={{ fontSize: 11, color: "var(--text-second)" }}>{person.location}</span>
       <RolePill roleKey={person.roleKey} />
-      {fbUser
-        ? <AppRolePill role={fbUser.role} />
-        : <span style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>not signed in yet</span>}
-      <div style={{ display: "flex", gap: 6 }}>
-        {onFilterByPerson && (
-          <Btn size="sm" variant="ghost" onClick={() => onFilterByPerson(person.email)} title={`View ${person.name.split(" ")[0]}'s engagements`}>
-            Pipeline
-          </Btn>
-        )}
-        {isAdmin && fbUser && <Btn size="sm" variant="ghost" onClick={() => onEdit(fbUser)}>Edit</Btn>}
-      </div>
+      {fbUser && isAdmin ? (
+        <select
+          value={fbUser.role || "viewer"}
+          onChange={e => handleRoleChange(e.target.value)}
+          disabled={saving}
+          style={{
+            fontSize: 11, padding: "4px 8px",
+            border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+            background: "var(--surface)", color: "var(--text-primary)",
+            cursor: "pointer", fontFamily: "inherit",
+            opacity: saving ? 0.5 : 1,
+          }}
+        >
+          <option value="admin">Admin</option>
+          <option value="crest_user">CREST user</option>
+          <option value="ac_user">AC user</option>
+        </select>
+      ) : fbUser ? (
+        <AppRolePill role={fbUser.role} />
+      ) : (
+        <span style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>not signed in yet</span>
+      )}
     </div>
   );
 }
 
-function TeamCard({ team, fbUsers, isAdmin, onEdit, onFilterByPerson }) {
+function TeamCard({ team, fbUsers, isAdmin }) {
   const [open, setOpen] = useState(true);
   const manager = team.manager ? team.members.find(p => p.email === team.manager) : null;
   const rest = team.members.filter(p => p.email !== team.manager);
@@ -116,11 +151,11 @@ function TeamCard({ team, fbUsers, isAdmin, onEdit, onFilterByPerson }) {
           </div>
           {manager && (
             <div style={{ background: team.colour + "08" }}>
-              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} onFilterByPerson={onFilterByPerson} />
+              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} isAdmin={isAdmin} teamColour={team.colour} showTeam={false} />
             </div>
           )}
           {rest.map(person => (
-            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={onEdit} teamColour={team.colour} showTeam={false} onFilterByPerson={onFilterByPerson} />
+            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} teamColour={team.colour} showTeam={false} />
           ))}
         </div>
       )}
@@ -171,7 +206,7 @@ export default function TeamPage({ onFilterByPerson }) {
       </div>
 
       {tab === "org" && ORG.map(team => (
-        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} onEdit={setEditingUser} onFilterByPerson={onFilterByPerson} />
+        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} />
       ))}
 
       {tab === "all" && (
@@ -180,8 +215,8 @@ export default function TeamPage({ onFilterByPerson }) {
             <span /><Label>Name</Label><Label>Team</Label><Label>Location</Label><Label>Role</Label><Label>App access</Label><span />
           </div>
           {PEOPLE.map((person, i) => (
-            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} onEdit={setEditingUser}
-              teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} onFilterByPerson={onFilterByPerson} />
+            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin}
+              teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} />
           ))}
         </Card>
       )}
