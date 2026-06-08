@@ -167,8 +167,8 @@ function TeamCard({ team, fbUsers, isAdmin, pendingRoles }) {
       </CardHeader>
       {open && (
         <div>
-          <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 100px 120px 80px", gap: 12, padding: "6px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-            <span /><Label>Name</Label><Label>Location</Label><Label>Team role</Label><Label>App access</Label><span />
+          <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 80px 100px 160px", gap: 12, padding: "6px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+            <span /><Label>Name</Label><Label>Location</Label><Label>Team role</Label><Label>App access</Label>
           </div>
           {manager && (
             <div style={{ background: team.colour + "08" }}>
@@ -239,8 +239,8 @@ export default function TeamPage({ onFilterByPerson }) {
 
       {tab === "all" && (
         <Card>
-          <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 100px 80px 100px 120px 80px", gap: 12, padding: "6px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
-            <span /><Label>Name</Label><Label>Team</Label><Label>Location</Label><Label>Role</Label><Label>App access</Label><span />
+          <div style={{ display: "grid", gridTemplateColumns: "36px 1fr 100px 80px 100px 160px", gap: 12, padding: "6px 18px", background: "var(--surface2)", borderBottom: "1px solid var(--border)" }}>
+            <span /><Label>Name</Label><Label>Team</Label><Label>Location</Label><Label>Role</Label><Label>App access</Label>
           </div>
           {PEOPLE.map((person, i) => (
             <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin}
