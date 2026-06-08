@@ -15,13 +15,14 @@ import SharePage from "./pages/SharePage";
 import ShareLinksPage from "./pages/ShareLinksPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
 import ACManagerPage from "./pages/ACManagerPage";
-import Sidebar from "./components/Sidebar"; // required
+import Sidebar, { normaliseRole } from "./components/Sidebar"; // required
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
 
 // Role-based default landing page
 function defaultPage(role) {
-  if (role === "csm" || role === "com") return "customers";
+  const tier = normaliseRole(role);
+  if (tier === "ac_user") return "ac-manager";
   return "dashboard";
 }
 

@@ -1,20 +1,46 @@
 import { useAuth } from "../hooks/useAuth";
 import { Avatar } from "./UI";
 
+// ─── Role definitions ─────────────────────────────────────────────────────────
+// admin      — Ben only. Sees everything including Settings.
+// crest_user — Full app: Dashboard, AC Manager, Customers, Pipeline,
+//              Integrations, Issues, Team, Share Links.
+// ac_user    — AC Manager only.
+// (legacy roles cse/com/csm/ae/viewer are mapped to crest_user or ac_user below)
+
+export function normaliseRole(role) {
+  switch (role) {
+    case "super_admin":
+    case "admin":       return "admin";
+    case "crest_user":
+    case "cse":
+    case "com":
+    case "csm":
+    case "manager":     return "crest_user";
+    case "ac_user":
+    case "ae":
+    case "ta":
+    case "viewer":
+    default:            return "ac_user";
+  }
+}
+
 const NAV_ITEMS = [
-  { id: "dashboard",    icon: "🏠", label: "My Dashboard" },
-  { id: "customers",    icon: "🏢", label: "Customers"    },
-  { id: "pipeline",     icon: "⚡", label: "Pipeline"     },
-  { id: "integrations", icon: "🔌", label: "Integrations" },
-  { id: "issues",       icon: "⚠️",  label: "Issues"       },
-  { id: "team",         icon: "👥", label: "Team"          },
-  { id: "ac-manager",   icon: "📋", label: "AC Manager"    },
-  { id: "sharelinks",   icon: "🔗", label: "Share Links"   },
-  { id: "settings",     icon: "⚙️",  label: "Settings"     },
+  { id: "dashboard",    icon: "🏠", label: "My Dashboard", roles: ["admin", "crest_user"] },
+  { id: "ac-manager",   icon: "📋", label: "AC Manager",   roles: ["admin", "crest_user", "ac_user"] },
+  { id: "customers",    icon: "🏢", label: "Customers",    roles: ["admin", "crest_user"] },
+  { id: "pipeline",     icon: "⚡", label: "Pipeline",     roles: ["admin", "crest_user"] },
+  { id: "integrations", icon: "🔌", label: "Integrations", roles: ["admin", "crest_user"] },
+  { id: "issues",       icon: "⚠️",  label: "Issues",       roles: ["admin", "crest_user"] },
+  { id: "team",         icon: "👥", label: "Team",         roles: ["admin", "crest_user"] },
+  { id: "sharelinks",   icon: "🔗", label: "Share Links",  roles: ["admin", "crest_user"] },
+  { id: "settings",     icon: "⚙️",  label: "Settings",     roles: ["admin"] },
 ];
 
 export default function Sidebar({ active, onChange }) {
   const { user, profile, logout } = useAuth();
+  const tier = normaliseRole(profile?.role);
+  const visibleItems = NAV_ITEMS.filter(item => item.roles.includes(tier));
 
   return (
     <div style={{
@@ -46,7 +72,7 @@ export default function Sidebar({ active, onChange }) {
 
       {/* Nav */}
       <nav style={{ flex: 1, padding: "10px 8px", overflowY: "auto" }}>
-        {NAV_ITEMS.map(item => {
+        {visibleItems.map(item => {
           const isActive = active === item.id;
           return (
             <button key={item.id} onClick={() => onChange(item.id)} style={{
@@ -77,7 +103,7 @@ export default function Sidebar({ active, onChange }) {
               {user?.displayName?.split(" ")[0]}
             </p>
             <p style={{ fontSize: 10, color: "var(--text-muted)", textTransform: "capitalize" }}>
-              {profile?.role?.replace("_", " ") || "viewer"}
+              {tier.replace("_", " ")}
             </p>
           </div>
         </div>

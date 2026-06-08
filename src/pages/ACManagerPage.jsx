@@ -255,6 +255,7 @@ export default function ACManagerPage() {
   const [tab, setTab]                 = useState("all");
   const [selectedReq, setSelectedReq] = useState(null);
   const [loadingReqs, setLoadingReqs] = useState(true);
+  const [assignedFilter, setAssignedFilter] = useState("all");
 
   // Live subscribe to acRequests
   useEffect(() => {
@@ -296,9 +297,16 @@ export default function ACManagerPage() {
   }, []);
 
   // Filter + sort
-  const filtered = requests.filter(r =>
-    tab === "all" || r.requestType === tab
-  );
+  // Unique assignees for filter picker
+  const assignees = [...new Set(
+    requests.map(r => r.assignedTo).filter(Boolean)
+  )].sort();
+
+  const filtered = requests.filter(r => {
+    if (tab !== "all" && r.requestType !== tab) return false;
+    if (assignedFilter !== "all" && r.assignedTo !== assignedFilter) return false;
+    return true;
+  });
   const sorted = [...filtered].sort((a, b) =>
     calcScore(b, weights) - calcScore(a, weights)
   );
@@ -390,6 +398,43 @@ export default function ACManagerPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* Assigned filter */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0 12px" }}>
+        <span style={{ fontSize: 12, color: "var(--text-muted)", flexShrink: 0 }}>Assigned to</span>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          <button
+            onClick={() => setAssignedFilter("all")}
+            style={{
+              padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+              cursor: "pointer", border: "1px solid",
+              background: assignedFilter === "all" ? "var(--purple-light)" : "transparent",
+              borderColor: assignedFilter === "all" ? "var(--purple)" : "var(--border)",
+              color: assignedFilter === "all" ? "var(--purple)" : "var(--text-muted)",
+              fontFamily: "inherit", transition: "all 0.13s",
+            }}
+          >
+            Everyone
+          </button>
+          {assignees.map(name => (
+            <button
+              key={name}
+              onClick={() => setAssignedFilter(assignedFilter === name ? "all" : name)}
+              style={{
+                padding: "4px 12px", borderRadius: 999, fontSize: 12, fontWeight: 600,
+                cursor: "pointer", border: "1px solid",
+                background: assignedFilter === name ? "var(--purple-light)" : "transparent",
+                borderColor: assignedFilter === name ? "var(--purple)" : "var(--border)",
+                color: assignedFilter === name ? "var(--purple)" : "var(--text-muted)",
+                fontFamily: "inherit", transition: "all 0.13s",
+                display: "flex", alignItems: "center", gap: 6,
+              }}
+            >
+              {name.split(" ")[0]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Table */}

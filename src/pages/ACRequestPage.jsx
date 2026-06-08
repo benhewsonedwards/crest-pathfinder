@@ -105,7 +105,7 @@ function MilestoneTimeline({ milestones, onToggle }) {
   const totalWidth = Math.max(sorted.length * itemMinWidth, 600);
 
   return (
-    <div style={{ overflowX: "auto", paddingBottom: 8 }}>
+    <div style={{ overflowX: "auto", paddingBottom: 8, paddingLeft: 12, paddingRight: 12 }}>
       <div style={{ position: "relative", minWidth: totalWidth, height: 140 }}>
 
         {/* Today marker */}
@@ -156,7 +156,7 @@ function MilestoneTimeline({ milestones, onToggle }) {
               key={m.id}
               style={{
                 position: "absolute",
-                left: `${Math.max(0, Math.min(pct, 97))}%`,
+                left: `clamp(${itemMinWidth/2}px, ${pct}%, calc(100% - ${itemMinWidth/2}px))`,
                 top: 0, width: itemMinWidth,
                 transform: "translateX(-50%)",
                 display: "flex", flexDirection: "column",
@@ -555,9 +555,9 @@ export default function ACRequestPage({ req, milestones, weights, onBack }) {
               {s.label}
             </p>
             {s.avatar ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, overflow: "hidden" }}>
                 <Avatar name={s.avatar} size={18} />
-                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)" }}>{s.avatar.split(" ")[0]}</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.avatar.split(" ")[0]}</span>
               </div>
             ) : s.pill ? (
               <Pill color={s.pill} style={{ fontSize: 11 }}>{s.value}</Pill>
