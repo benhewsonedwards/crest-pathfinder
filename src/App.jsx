@@ -14,6 +14,7 @@ import MyDashboard from "./pages/MyDashboard";
 import SharePage from "./pages/SharePage";
 import ShareLinksPage from "./pages/ShareLinksPage";
 import IntegrationsPage from "./pages/IntegrationsPage";
+import ACManagerPage from "./pages/ACManagerPage";
 import Sidebar from "./components/Sidebar"; // required
 import EngagementModal from "./components/EngagementModal";
 import { Spinner } from "./components/UI";
@@ -202,6 +203,8 @@ function AppShell() {
           />
         ) : page === "sharelinks" ? (
           <ShareLinksPage />
+        ) : page === "ac-manager" ? (
+          <ACManagerPage />
         ) : page === "settings" ? (
           <div style={{ padding: "24px 28px 48px", maxWidth: 680 }}>
             <h1 style={{ fontFamily: "Poppins, sans-serif", fontWeight: 700, fontSize: 22, marginBottom: 4 }}>Settings</h1>

@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { id: "integrations", icon: "🔌", label: "Integrations" },
   { id: "issues",       icon: "⚠️",  label: "Issues"       },
   { id: "team",         icon: "👥", label: "Team"          },
+  { id: "ac-manager",   icon: "📋", label: "AC Manager"    },
   { id: "sharelinks",   icon: "🔗", label: "Share Links"   },
   { id: "settings",     icon: "⚙️",  label: "Settings"     },
 ];
