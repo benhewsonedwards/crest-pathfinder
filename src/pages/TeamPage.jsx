@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, onSnapshot, doc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, setDoc, deleteDoc, getDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { ROLES as APP_ROLES } from "../lib/constants";
@@ -53,7 +53,7 @@ function AppRolePill({ role }) {
   return <Pill color={tierColour(role)} style={{ fontSize: 10 }}>{tierLabel(role)}</Pill>;
 }
 
-function PersonRow({ person, fbUser, isAdmin, teamColour, showTeam }) {
+function PersonRow({ person, fbUser, pendingRole, isAdmin, teamColour, showTeam }) {
   const [saving, setSaving] = useState(false);
   const initials = person.initials || person.name.split(" ").map(n => n[0]).join("").slice(0, 2);
   const cols = showTeam
@@ -61,10 +61,24 @@ function PersonRow({ person, fbUser, isAdmin, teamColour, showTeam }) {
     : "36px 1fr 80px 100px 160px";
 
   async function handleRoleChange(newRole) {
-    if (!fbUser?.uid) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "users", fbUser.uid), { role: newRole });
+      if (fbUser?.uid) {
+        // User has signed in — update their live profile
+        await updateDoc(doc(db, "users", fbUser.uid), { role: newRole });
+      } else {
+        // User hasn't signed in yet — write to pendingRoles keyed by email
+        if (newRole === "ac_user") {
+          // ac_user is the default — no need to store, just delete any pending
+          await deleteDoc(doc(db, "pendingRoles", person.email));
+        } else {
+          await setDoc(doc(db, "pendingRoles", person.email), {
+            role: newRole,
+            setBy: "admin",
+            setAt: new Date().toISOString(),
+          });
+        }
+      }
     } finally {
       setSaving(false);
     }
@@ -100,23 +114,30 @@ function PersonRow({ person, fbUser, isAdmin, teamColour, showTeam }) {
       {showTeam && <span style={{ fontSize: 11, color: "var(--text-second)" }}>{person.team}</span>}
       <span style={{ fontSize: 11, color: "var(--text-second)" }}>{person.location}</span>
       <RolePill roleKey={person.roleKey} />
-      {fbUser && isAdmin ? (
-        <select
-          value={fbUser.role || "viewer"}
-          onChange={e => handleRoleChange(e.target.value)}
-          disabled={saving}
-          style={{
-            fontSize: 11, padding: "4px 8px",
-            border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
-            background: "var(--surface)", color: "var(--text-primary)",
-            cursor: "pointer", fontFamily: "inherit",
-            opacity: saving ? 0.5 : 1,
-          }}
-        >
-          <option value="admin">Admin</option>
-          <option value="crest_user">CREST user</option>
-          <option value="ac_user">AC user</option>
-        </select>
+      {isAdmin ? (
+        <div>
+          <select
+            value={fbUser?.role || pendingRole || "ac_user"}
+            onChange={e => handleRoleChange(e.target.value)}
+            disabled={saving}
+            style={{
+              fontSize: 11, padding: "4px 8px",
+              border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+              background: "var(--surface)", color: "var(--text-primary)",
+              cursor: "pointer", fontFamily: "inherit",
+              opacity: saving ? 0.5 : 1,
+            }}
+          >
+            <option value="admin">Admin</option>
+            <option value="crest_user">CREST user</option>
+            <option value="ac_user">AC user</option>
+          </select>
+          {!fbUser && (
+            <p style={{ fontSize: 10, color: pendingRole ? "var(--amber)" : "var(--text-muted)", marginTop: 2 }}>
+              {pendingRole ? `⏳ pending sign-in` : "will default to AC user"}
+            </p>
+          )}
+        </div>
       ) : fbUser ? (
         <AppRolePill role={fbUser.role} />
       ) : (
@@ -126,7 +147,7 @@ function PersonRow({ person, fbUser, isAdmin, teamColour, showTeam }) {
   );
 }
 
-function TeamCard({ team, fbUsers, isAdmin }) {
+function TeamCard({ team, fbUsers, isAdmin, pendingRoles }) {
   const [open, setOpen] = useState(true);
   const manager = team.manager ? team.members.find(p => p.email === team.manager) : null;
   const rest = team.members.filter(p => p.email !== team.manager);
@@ -151,11 +172,11 @@ function TeamCard({ team, fbUsers, isAdmin }) {
           </div>
           {manager && (
             <div style={{ background: team.colour + "08" }}>
-              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} isAdmin={isAdmin} teamColour={team.colour} showTeam={false} />
+              <PersonRow person={manager} fbUser={fbUsers.find(u => u.email === manager.email)} pendingRole={pendingRoles[manager.email]} isAdmin={isAdmin} teamColour={team.colour} showTeam={false} />
             </div>
           )}
           {rest.map(person => (
-            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin} teamColour={team.colour} showTeam={false} />
+            <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} pendingRole={pendingRoles[person.email]} isAdmin={isAdmin} teamColour={team.colour} showTeam={false} />
           ))}
         </div>
       )}
@@ -166,6 +187,7 @@ function TeamCard({ team, fbUsers, isAdmin }) {
 export default function TeamPage({ onFilterByPerson }) {
   const { profile } = useAuth();
   const [fbUsers, setFbUsers] = useState([]);
+  const [pendingRoles, setPendingRoles] = useState({}); // email → role
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
   const [tab, setTab] = useState("org");
@@ -173,10 +195,16 @@ export default function TeamPage({ onFilterByPerson }) {
   const isAdmin = ["super_admin", "admin"].includes(profile?.role);
 
   useEffect(() => {
-    return onSnapshot(collection(db, "users"), snap => {
+    const u1 = onSnapshot(collection(db, "users"), snap => {
       setFbUsers(snap.docs.map(d => ({ uid: d.id, ...d.data() })));
       setLoading(false);
     });
+    const u2 = onSnapshot(collection(db, "pendingRoles"), snap => {
+      const map = {};
+      snap.docs.forEach(d => { map[d.id] = d.data().role; });
+      setPendingRoles(map);
+    }, () => {}); // silently fail if non-admin — rules block read
+    return () => { u1(); u2(); };
   }, []);
 
   const signedIn = fbUsers.filter(u => PEOPLE.find(p => p.email === u.email)).length;
@@ -206,7 +234,7 @@ export default function TeamPage({ onFilterByPerson }) {
       </div>
 
       {tab === "org" && ORG.map(team => (
-        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} />
+        <TeamCard key={team.key} team={team} fbUsers={fbUsers} isAdmin={isAdmin} pendingRoles={pendingRoles} />
       ))}
 
       {tab === "all" && (
@@ -216,7 +244,7 @@ export default function TeamPage({ onFilterByPerson }) {
           </div>
           {PEOPLE.map((person, i) => (
             <PersonRow key={person.email} person={person} fbUser={fbUsers.find(u => u.email === person.email)} isAdmin={isAdmin}
-              teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} />
+              pendingRole={pendingRoles[person.email]} teamColour={ORG.find(t => t.members.find(m => m.email === person.email))?.colour} showTeam={true} />
           ))}
         </Card>
       )}

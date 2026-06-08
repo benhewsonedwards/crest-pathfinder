@@ -101,6 +101,14 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ─── /pendingRoles ────────────────────────────────────────────────────────
+    // Keyed by email. Admin sets role before user signs in.
+    // Auth hook reads and applies on first sign-in, then deletes the doc.
+    match /pendingRoles/{email} {
+      allow read:   if isAuth() && request.auth.token.email == email || isAdmin();
+      allow write:  if isAdmin();
+    }
+
     // ─── /acRequests ──────────────────────────────────────────────────────────
     match /acRequests/{requestId} {
       allow read:   if isViewer();

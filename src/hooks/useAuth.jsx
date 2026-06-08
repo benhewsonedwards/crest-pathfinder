@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, googleProvider } from "../lib/firebase";
 import { personByEmail } from "../lib/people";
 
@@ -63,14 +63,18 @@ export function AuthProvider({ children }) {
           await setDoc(ref, updates, { merge: true });
           setProfile({ ...existing, ...updates });
         } else {
-          // First sign-in — create profile from directory data if available
+          // First sign-in — check for a pre-set pending role
+          const pendingRef = doc(db, "pendingRoles", firebaseUser.email);
+          const pendingSnap = await getDoc(pendingRef);
+          const pendingRole = pendingSnap.exists() ? pendingSnap.data().role : null;
+
           const newProfile = {
             uid:          firebaseUser.uid,
             email:        firebaseUser.email,
             displayName:  directoryPerson?.name      || firebaseUser.displayName,
             photoURL:     firebaseUser.photoURL,
-            role:         directoryPerson ? roleFromDirectoryKey(directoryPerson.roleKey) : "viewer",
-            // Directory fields
+            // Pending role takes priority, then directory mapping, then viewer
+            role:         pendingRole || (directoryPerson ? roleFromDirectoryKey(directoryPerson.roleKey) : "viewer"),
             directoryEmail: directoryPerson?.email   || null,
             roleKey:      directoryPerson?.roleKey   || null,
             title:        directoryPerson?.title     || null,
@@ -81,6 +85,8 @@ export function AuthProvider({ children }) {
             lastSeen:     serverTimestamp(),
           };
           await setDoc(ref, newProfile);
+          // Clean up the pending role doc now it's been applied
+          if (pendingRole) await deleteDoc(pendingRef);
           setProfile(newProfile);
         }
       } else {
