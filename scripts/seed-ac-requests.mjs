@@ -202,8 +202,10 @@ async function seed() {
     await ref.set(fields, { merge: true });
     console.log(`  ✓ ${sfId} — ${req.accountName}`);
 
-    // Seed milestones
+    // Seed milestones — delete existing first to prevent duplicates on re-run
     const milestones = MILESTONES[sfId] || [];
+    const existingMs = await ref.collection("milestones").get();
+    for (const d of existingMs.docs) await d.ref.delete();
     for (const m of milestones) {
       const mRef = ref.collection("milestones").doc();
       await mRef.set({
@@ -212,7 +214,7 @@ async function seed() {
         createdAt: now,
       });
     }
-    if (milestones.length) console.log(`    └ ${milestones.length} milestones`);
+    if (milestones.length) console.log(`    └ ${milestones.length} milestones (replaced)`);
   }
 
   // Seed acrSettings/config if not present
