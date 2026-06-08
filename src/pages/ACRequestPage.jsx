@@ -421,6 +421,77 @@ function EscalationPanel({ req }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+
+// ─── Priority picker ──────────────────────────────────────────────────────────
+
+const PRIORITY_OPTIONS = ["Critical", "High", "Medium", "Low"];
+const PRIORITY_PILL_COLOURS = {
+  Critical: { bg: "var(--red-light)",    text: "var(--red)"    },
+  High:     { bg: "var(--orange-light)", text: "var(--orange)" },
+  Medium:   { bg: "var(--amber-light)",  text: "var(--amber)"  },
+  Low:      { bg: "var(--slate-light)",  text: "var(--slate)"  },
+};
+
+function PriorityPicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const col = PRIORITY_PILL_COLOURS[value];
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 4,
+          padding: "2px 8px", borderRadius: 999,
+          fontSize: 11, fontWeight: 600, cursor: "pointer",
+          background: col ? col.bg : "var(--surface2)",
+          color: col ? col.text : "var(--text-muted)",
+          border: `1px solid ${col ? col.text + "40" : "var(--border)"}`,
+          fontFamily: "inherit", transition: "opacity 0.13s",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {value || "— set —"} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
+          <div style={{
+            position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 10,
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)",
+            minWidth: 110, overflow: "hidden",
+          }}>
+            {PRIORITY_OPTIONS.map(p => {
+              const c = PRIORITY_PILL_COLOURS[p];
+              return (
+                <button
+                  key={p}
+                  onClick={() => { onChange(p); setOpen(false); }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8,
+                    width: "100%", padding: "8px 12px",
+                    background: value === p ? c.bg : "transparent",
+                    border: "none", cursor: "pointer",
+                    fontFamily: "inherit", fontSize: 12, fontWeight: value === p ? 700 : 400,
+                    color: value === p ? c.text : "var(--text-second)",
+                    textAlign: "left", transition: "background 0.1s",
+                  }}
+                  onMouseEnter={e => { if (value !== p) e.currentTarget.style.background = "var(--surface2)"; }}
+                  onMouseLeave={e => { if (value !== p) e.currentTarget.style.background = "transparent"; }}
+                >
+                  <span style={{ width: 8, height: 8, borderRadius: "50%", background: c.text, flexShrink: 0 }} />
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function ACRequestPage({ req, milestones, weights, arrCeiling = DEFAULT_ARR_CEILING, onBack }) {
   const { user } = useAuth();
   const { toasts, toast } = useToast();
@@ -590,22 +661,9 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
                 <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.avatar.split(" ")[0]}</span>
               </div>
             ) : s.pill && s.editable ? (
-              <select
-                value={priority}
-                onChange={e => handlePriorityChange(e.target.value)}
-                style={{
-                  fontSize: 12, fontWeight: 600, padding: "2px 6px",
-                  border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
-                  background: "var(--surface)", color: "var(--text-primary)",
-                  cursor: "pointer", fontFamily: "inherit",
-                }}
-              >
-                <option value="">— not set —</option>
-                <option value="Critical">Critical</option>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
+              <div style={{ position: "relative" }}>
+                <PriorityPicker value={priority} onChange={handlePriorityChange} />
+              </div>
             ) : s.pill ? (
               <Pill color={s.pill} style={{ fontSize: 11 }}>{s.value}</Pill>
             ) : (
