@@ -427,12 +427,14 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
 
   // Deliverables summary — editable sticky note
   const [deliverables, setDeliverables] = useState(req.deliverablesSummary || "");
+  const [priority, setPriority] = useState(req.sfPriority || "");
   const [deliverablesSaving, setDeliverablesSaving] = useState(false);
   const [deliverablesTimer, setDeliverablesTimer] = useState(null);
 
   // Auto-save deliverables after 1.5s of no typing
   useEffect(() => {
     setDeliverables(req.deliverablesSummary || "");
+    setPriority(req.sfPriority || "");
   }, [req.id]);
 
   function handleDeliverablesChange(val) {
@@ -453,6 +455,19 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
     setDeliverablesTimer(t);
   }
 
+  async function handlePriorityChange(val) {
+    setPriority(val);
+    try {
+      await updateDoc(doc(db, "acRequests", req.id), {
+        sfPriority: val,
+        lastUpdatedBy: user?.email || "unknown",
+        lastUpdatedAt: serverTimestamp(),
+      });
+    } catch (e) {
+      toast("Failed to update priority", "error");
+    }
+  }
+
   async function handleToggleMilestone(milestoneId, completed) {
     try {
       await updateDoc(doc(db, "acRequests", req.id, "milestones", milestoneId), { completed });
@@ -466,10 +481,11 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
 
   // Derive next meeting and next deadline from milestones
   const now = Date.now();
+  const startOfToday = new Date(); startOfToday.setHours(0,0,0,0);
   const futureMilestones = milestones.filter(m => {
     if (m.completed) return false;
     const d = m.date?.toDate ? m.date.toDate() : new Date(m.date || 0);
-    return d.getTime() > now;
+    return d.getTime() >= startOfToday.getTime();
   }).sort((a, b) => {
     const da = a.date?.toDate ? a.date.toDate() : new Date(a.date || 0);
     const db_ = b.date?.toDate ? b.date.toDate() : new Date(b.date || 0);
@@ -485,7 +501,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
   const isOverdueFlag = milestones.some(m => {
     if (m.completed) return false;
     const d = m.date?.toDate ? m.date.toDate() : new Date(m.date || 0);
-    return d < now;
+    return d < startOfToday;
   });
 
   return (
@@ -552,7 +568,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
       }}>
         {[
           { label: "ARR",       value: fmtARR(req.arr) },
-          { label: "Priority",  value: req.sfPriority || "—", pill: PRIORITY_COLOURS[req.sfPriority] },
+          { label: "Priority",  value: priority || "—", pill: PRIORITY_COLOURS[priority], editable: true },
           { label: "Assigned",  value: req.assignedTo || "Unassigned", avatar: req.assignedTo },
           { label: "Status",    value: req.sfStatus || "—", pill: STATUS_COLOURS[req.sfStatus] },
           { label: "Score",     value: Math.round(score * 100), scoreColour: score * 100 >= 70 ? "var(--red)" : score * 100 >= 40 ? "var(--amber)" : "var(--green)" },
@@ -573,6 +589,23 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
                 <Avatar name={s.avatar} size={18} />
                 <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.avatar.split(" ")[0]}</span>
               </div>
+            ) : s.pill && s.editable ? (
+              <select
+                value={priority}
+                onChange={e => handlePriorityChange(e.target.value)}
+                style={{
+                  fontSize: 12, fontWeight: 600, padding: "2px 6px",
+                  border: "1px solid var(--border)", borderRadius: "var(--radius-sm)",
+                  background: "var(--surface)", color: "var(--text-primary)",
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                <option value="">— not set —</option>
+                <option value="Critical">Critical</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
             ) : s.pill ? (
               <Pill color={s.pill} style={{ fontSize: 11 }}>{s.value}</Pill>
             ) : (
@@ -631,7 +664,6 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
           {[
             { label: "SF Name",    value: req.sfName },
             { label: "Status",     value: req.sfStatus },
-            { label: "Priority",   value: req.sfPriority },
             { label: "ARR",        value: fmtARR(req.arr) },
             { label: "Completion", value: fmtDate(req.preferredCompletion) },
             { label: "Opened",     value: fmtDate(req.createdAt) },
