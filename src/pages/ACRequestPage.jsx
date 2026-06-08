@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   collection, onSnapshot, addDoc, updateDoc, doc,
   serverTimestamp, Timestamp,
@@ -434,12 +434,19 @@ const PRIORITY_PILL_COLOURS = {
 
 function PriorityPicker({ value, onChange }) {
   const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState(null);
+  const btnRef = React.useRef(null);
   const col = PRIORITY_PILL_COLOURS[value];
+
+  function handleOpen() {
+    if (btnRef.current) setRect(btnRef.current.getBoundingClientRect());
+    setOpen(o => !o);
+  }
 
   return (
     <div style={{ position: "relative" }}>
-      <button
-        onClick={() => setOpen(o => !o)}
+      <button ref={btnRef}
+        onClick={handleOpen}
         style={{
           display: "inline-flex", alignItems: "center", gap: 4,
           padding: "2px 8px", borderRadius: 999,
@@ -453,11 +460,11 @@ function PriorityPicker({ value, onChange }) {
       >
         {value || "— set —"} <span style={{ fontSize: 9, opacity: 0.6 }}>▾</span>
       </button>
-      {open && (
+      {open && rect && (
         <>
-          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9 }} />
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
           <div style={{
-            position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 10,
+            position: "fixed", top: rect.bottom + 4, left: rect.left, zIndex: 100,
             background: "var(--surface)", border: "1px solid var(--border)",
             borderRadius: "var(--radius)", boxShadow: "var(--shadow-md)",
             minWidth: 110, overflow: "hidden",
@@ -634,7 +641,7 @@ export default function ACRequestPage({ req, milestones, weights, arrCeiling = D
       <div style={{
         display: "flex", gap: 0, flexWrap: "wrap",
         background: "var(--surface)", border: "1px solid var(--border)",
-        borderRadius: "var(--radius-lg)", overflow: "hidden",
+        borderRadius: "var(--radius-lg)", overflow: "visible",
         marginBottom: 20, boxShadow: "var(--shadow-sm)",
       }}>
         {[
